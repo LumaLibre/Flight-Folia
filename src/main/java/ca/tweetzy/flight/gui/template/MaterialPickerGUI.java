@@ -46,12 +46,12 @@ import java.util.stream.Collectors;
  *
  * @author Kiran Hart
  */
-public final class MaterialPickerGUI extends BaseGUI {
+public class MaterialPickerGUI extends BaseGUI {
 
     private final Gui parent;
     private final String inputTitle, inputSubtitle;
     private final String searchQuery;
-    private final BiConsumer<GuiClickEvent, ItemStack> selected;
+    protected final BiConsumer<GuiClickEvent, ItemStack> selected;
 
 
     public MaterialPickerGUI(final Gui parent, final String titleOverride, final String searchQuery, final String inputTitle, final String inputSubtitle, @NonNull final BiConsumer<GuiClickEvent, ItemStack> selected) {
@@ -130,6 +130,8 @@ public final class MaterialPickerGUI extends BaseGUI {
         if (this.searchQuery != null)
             setButton(5, 7, buildResetButton(), click -> click.manager.showGUI(click.player, new MaterialPickerGUI(MaterialPickerGUI.this.parent, MaterialPickerGUI.this.title, null, MaterialPickerGUI.this.inputTitle, MaterialPickerGUI.this.inputSubtitle, this.selected)));
 
+        drawExtra();
+
         applyBackExit(this.parent);
     }
 
@@ -151,6 +153,8 @@ public final class MaterialPickerGUI extends BaseGUI {
                 .lore("&7Click to clear your search")
                 .make();
     }
+
+    protected void drawExtra(){}
 
     @Override
     protected ItemStack getNextButton() {
