@@ -23,6 +23,7 @@ import ca.tweetzy.flight.comp.enums.ServerVersion;
 import ca.tweetzy.flight.hooks.PlaceholderAPIHook;
 import com.cryptomorin.xseries.XEnchantment;
 import com.cryptomorin.xseries.profiles.builder.XSkull;
+import com.cryptomorin.xseries.profiles.objects.ProfileInputType;
 import com.cryptomorin.xseries.profiles.objects.Profileable;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
@@ -67,6 +68,8 @@ public final class QuickItem {
     private CompMaterial material;
 
     private int amount = -1;
+
+    private static String fallbackTexture = "https://textures.minecraft.net/texture/ecc58cb55b1a11e6d88c2d4d1a6366c23887dee26304bda412c4a51825f199";
 
     @Getter
     private String name;
@@ -154,6 +157,14 @@ public final class QuickItem {
     public QuickItem name(String name) {
         this.name = name;
 
+        return this;
+    }
+
+    /**
+     * Set a fallback texture for the item if using custom heads.
+     */
+    public QuickItem fallbackTexture(String textureUrl) {
+        this.fallbackTexture = textureUrl;
         return this;
     }
 
@@ -487,7 +498,12 @@ public final class QuickItem {
     }
 
     public static CompletableFuture<ItemStack> asyncTexturedHead(String url) {
-        return XSkull.of(CompMaterial.PLAYER_HEAD.parseItem()).profile(Profileable.detect(url)).lenient().applyAsync();
+        return XSkull
+                .of(CompMaterial.PLAYER_HEAD.parseItem())
+                .profile(Profileable.detect(url))
+                .fallback(Profileable.of(ProfileInputType.TEXTURE_URL, fallbackTexture))
+                .lenient()
+                .applyAsync();
     }
 
     public static ItemStack createTexturedHead(String url) {
@@ -498,7 +514,12 @@ public final class QuickItem {
         SkullMeta sm = (SkullMeta) item.getItemMeta();
         assert sm != null;
 
-        XSkull.of(sm).profile(Profileable.detect(url)).lenient().apply();
+        XSkull
+                .of(sm)
+                .profile(Profileable.detect(url))
+                .fallback(Profileable.of(ProfileInputType.TEXTURE_URL, fallbackTexture))
+                .lenient()
+                .apply();
         item.setItemMeta(sm);
 
         return item;
