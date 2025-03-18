@@ -320,16 +320,23 @@ public final class QuickItem {
         if (this.name != null && !"".equals(this.name))
             compiledMeta.setDisplayName(Common.colorize(name));
 
+        List<String> lore = new ArrayList<>();
+
+        if (meta != null && meta.getLore() != null)
+            lore = meta.getLore();
+
         if (!this.lores.isEmpty()) {
             final List<String> coloredLores = new ArrayList<>();
 
-            for (final String lore : this.lores)
-                if (lore != null)
-                    for (final String subLore : lore.split("\n"))
+            for (final String line : this.lores)
+                if (line != null)
+                    for (final String subLore : line.split("\n"))
                         coloredLores.add(Common.colorize("&7" + subLore));
 
-            compiledMeta.setLore(coloredLores);
+            lore.addAll(coloredLores);
         }
+
+        compiledMeta.setLore(lore);
 
         if (this.unbreakable) {
             this.flags.add(ItemFlag.HIDE_ATTRIBUTES);
@@ -446,10 +453,10 @@ public final class QuickItem {
         final QuickItem builder = new QuickItem();
         final ItemMeta meta = item.hasItemMeta() ? item.getItemMeta() : Bukkit.getItemFactory().getItemMeta(item.getType());
 
-        if (meta != null && meta.getLore() != null)
-            builder.lore(meta.getLore());
+//        if (meta != null && meta.getLore() != null)
+//            builder.lore(meta.getLore());
 
-        return builder.item(item);
+        return builder.item(item).meta(meta);
     }
 
     /**
