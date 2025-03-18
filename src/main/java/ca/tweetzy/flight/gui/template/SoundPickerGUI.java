@@ -54,7 +54,7 @@ public final class SoundPickerGUI extends BaseGUI {
 
 
     public SoundPickerGUI(final Gui parent, final String titleOverride, final String searchQuery, final String inputTitle, final String inputSubtitle, @NonNull final BiConsumer<GuiClickEvent, CompSound> selected) {
-        super(parent, titleOverride == null ? "&eSound Selector" : titleOverride);
+        super(parent, titleOverride == null ? "&eSound Selector" : Common.colorize(titleOverride));
         this.searchQuery = searchQuery;
         this.inputTitle = inputTitle;
         this.inputSubtitle = inputSubtitle;
@@ -123,7 +123,7 @@ public final class SoundPickerGUI extends BaseGUI {
     }
 
     protected ItemStack buildIcon(@NonNull final CompSound sound) {
-        return QuickItem.of(CompMaterial.MUSIC_DISC_5).name("&e&l" + ChatUtil.capitalizeFully(sound.parseSound().name())).lore("&7Click to select this material").make();
+        return QuickItem.of(CompMaterial.MUSIC_DISC_5).name("&e&l" + ChatUtil.capitalizeFully(sound.friendlyName().replace(".", " "))).lore("&7Click to select this material").make();
     }
 
     protected ItemStack buildSearchButton() {
