@@ -108,8 +108,14 @@ public final class PlayerUtil {
             }
 
             String numStr = perm.substring(perm.lastIndexOf('.') + 1);
+
             if (numStr.equals("*")) {
                 return def;
+
+            }
+
+            if (!numStr.matches("\\d+")) {
+                continue;
             }
 
             final int number = Integer.parseInt(numStr);

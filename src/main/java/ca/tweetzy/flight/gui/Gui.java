@@ -10,6 +10,7 @@ import ca.tweetzy.flight.gui.events.GuiOpenEvent;
 import ca.tweetzy.flight.gui.events.GuiPageEvent;
 import ca.tweetzy.flight.gui.methods.Clickable;
 import ca.tweetzy.flight.gui.methods.Closable;
+import ca.tweetzy.flight.gui.methods.Delayable;
 import ca.tweetzy.flight.gui.methods.Droppable;
 import ca.tweetzy.flight.gui.methods.Openable;
 import ca.tweetzy.flight.gui.methods.Pagable;
@@ -64,7 +65,7 @@ public class Gui {
     protected Clickable defaultClicker = null;
     protected Clickable privateDefaultClicker = null;
     protected Clickable playerInvClicker = null;
-    protected Clickable delayClicker = null;
+    protected Delayable delayClicker = null;
 
     protected Openable opener = null;
     protected Closable closer = null;
@@ -315,7 +316,7 @@ public class Gui {
     }
 
     @NotNull
-    protected Gui setClickDelayAction(@Nullable Clickable action) {
+    protected Gui setClickDelayAction(@Nullable Delayable action) {
         delayClicker = action;
         return this;
     }
@@ -735,6 +736,8 @@ public class Gui {
         return dropper == null || dropper.onDrop(new GuiDropItemEvent(manager, this, player, event));
     }
 
+    protected void onClickDelay(Player player, int slot, long remaining) {}
+
     protected boolean onClick(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
         final int cell = event.getSlot();
         Map<ClickType, Clickable> conditionals = conditionalButtons.get(cell);
@@ -749,8 +752,9 @@ public class Gui {
                 if (this.globalLastClicked == -1 || (System.currentTimeMillis() - this.globalLastClicked) > this.globalClickDelay) {
                     this.globalLastClicked = System.currentTimeMillis();
                 } else {
-                    if (this.delayClicker != null)
-                        this.delayClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+                    if (this.delayClicker != null) {
+                        this.delayClicker.onClick(this.globalLastClicked, this.globalClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                    }
                     return false;//todo call delay event
                 }
             }
@@ -759,8 +763,9 @@ public class Gui {
                 if (slotLastClicked == -1 || (System.currentTimeMillis() - slotLastClicked) > slotClickDelay) {
                     this.slotLastClicked.put(cell, System.currentTimeMillis());
                 } else {
-                    if (this.delayClicker != null)
-                        this.delayClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+                    if (this.delayClicker != null) {
+                        this.delayClicker.onClick(slotLastClicked, slotClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                    }
                     return false;
                 }
             }

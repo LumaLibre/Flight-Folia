@@ -23,6 +23,8 @@ package ca.tweetzy.flight.comp.enums;
 
 import com.cryptomorin.xseries.XItemStack;
 import com.cryptomorin.xseries.base.XBase;
+import com.cryptomorin.xseries.base.annotations.XChange;
+import com.cryptomorin.xseries.base.annotations.XInfo;
 import com.google.common.base.Enums;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -72,7 +74,8 @@ import java.util.stream.Collectors;
  */
 public enum CompMaterial implements XBase<CompMaterial, Material> {
     ACACIA_BOAT("BOAT_ACACIA"),
-    ACACIA_BUTTON("WOOD_BUTTON"),
+    @XInfo(since = "1.13")
+    ACACIA_BUTTON,
     ACACIA_CHEST_BOAT,
     ACACIA_DOOR("ACACIA_DOOR", "ACACIA_DOOR_ITEM"),
     ACACIA_FENCE,
@@ -81,12 +84,14 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     ACACIA_LEAVES(0, "LEAVES_2"),
     ACACIA_LOG(0, "LOG_2"),
     ACACIA_PLANKS(4, "WOOD"),
-    ACACIA_PRESSURE_PLATE("WOOD_PLATE"),
+    @XInfo(since = "1.13")
+    ACACIA_PRESSURE_PLATE,
     ACACIA_SAPLING(4, "SAPLING"),
-    ACACIA_SIGN("SIGN_POST", "SIGN"),
+    @XInfo(since = "1.13") ACACIA_SIGN,
     ACACIA_SLAB(4, "WOOD_DOUBLE_STEP", "WOOD_STEP", "WOODEN_SLAB"),
     ACACIA_STAIRS,
-    ACACIA_TRAPDOOR("TRAP_DOOR"),
+    @XInfo(since = "1.13")
+    ACACIA_TRAPDOOR,
     ACACIA_WALL_HANGING_SIGN,
     ACACIA_WALL_SIGN("WALL_SIGN"),
     ACACIA_WOOD(0, "LOG_2"),
@@ -168,7 +173,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BIG_DRIPLEAF,
     BIG_DRIPLEAF_STEM,
     BIRCH_BOAT("BOAT_BIRCH"),
-    BIRCH_BUTTON("WOOD_BUTTON"),
+    @XInfo(since = "1.13")
+    BIRCH_BUTTON,
     BIRCH_CHEST_BOAT,
     BIRCH_DOOR("BIRCH_DOOR", "BIRCH_DOOR_ITEM"),
     BIRCH_FENCE,
@@ -177,12 +183,14 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BIRCH_LEAVES(2, "LEAVES"),
     BIRCH_LOG(2, "LOG"),
     BIRCH_PLANKS(2, "WOOD"),
-    BIRCH_PRESSURE_PLATE("WOOD_PLATE"),
+    @XInfo(since = "1.13")
+    BIRCH_PRESSURE_PLATE,
     BIRCH_SAPLING(2, "SAPLING"),
-    BIRCH_SIGN("SIGN_POST", "SIGN"),
+    @XInfo(since = "1.13") BIRCH_SIGN,
     BIRCH_SLAB(2, "WOOD_DOUBLE_STEP", "WOOD_STEP", "WOODEN_SLAB"),
     BIRCH_STAIRS("BIRCH_WOOD_STAIRS"),
-    BIRCH_TRAPDOOR("TRAP_DOOR"),
+    @XInfo(since = "1.13")
+    BIRCH_TRAPDOOR,
     BIRCH_WALL_HANGING_SIGN,
     BIRCH_WALL_SIGN("WALL_SIGN"),
     BIRCH_WOOD(2, "LOG"),
@@ -201,7 +209,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BLACK_CARPET(15, "CARPET"),
     BLACK_CONCRETE(15, "CONCRETE"),
     BLACK_CONCRETE_POWDER(15, "CONCRETE_POWDER"),
-    BLACK_DYE(0, "INK_SACK", "INK_SAC"),
+    @XInfo(since = "1.14") BLACK_DYE(0, "INK_SACK", "INK_SAC"),
     BLACK_GLAZED_TERRACOTTA,
     BLACK_SHULKER_BOX,
     BLACK_STAINED_GLASS(15, "STAINED_GLASS"),
@@ -222,7 +230,9 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BLUE_CARPET(11, "CARPET"),
     BLUE_CONCRETE(11, "CONCRETE"),
     BLUE_CONCRETE_POWDER(11, "CONCRETE_POWDER"),
-    BLUE_DYE(4, "INK_SACK", "LAPIS_LAZULI"),
+    @XInfo(since = "1.14") BLUE_DYE,
+    @XInfo(since = "1.21.5")
+    BLUE_EGG,
     BLUE_GLAZED_TERRACOTTA,
     BLUE_ICE,
     BLUE_ORCHID(1, "RED_ROSE"),
@@ -264,7 +274,9 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BROWN_CARPET(12, "CARPET"),
     BROWN_CONCRETE(12, "CONCRETE"),
     BROWN_CONCRETE_POWDER(12, "CONCRETE_POWDER"),
-    BROWN_DYE(3, "INK_SACK", "DYE", "COCOA_BEANS"),
+    @XInfo(since = "1.14") BROWN_DYE,
+    @XInfo(since = "1.21.5")
+    BROWN_EGG,
     BROWN_GLAZED_TERRACOTTA,
     BROWN_MUSHROOM,
     BROWN_MUSHROOM_BLOCK("BROWN_MUSHROOM", "HUGE_MUSHROOM_1"),
@@ -284,7 +296,11 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     BUDDING_AMETHYST,
     BUNDLE,
     BURN_POTTERY_SHERD,
+    @XInfo(since = "1.21.5")
+    BUSH,
     CACTUS,
+    @XInfo(since = "1.21.5")
+    CACTUS_FLOWER,
     CAKE("CAKE_BLOCK"),
     CALCITE,
     CALIBRATED_SCULK_SENSOR,
@@ -313,7 +329,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     CHAINMAIL_CHESTPLATE,
     CHAINMAIL_HELMET,
     CHAINMAIL_LEGGINGS,
-    CHAIN_COMMAND_BLOCK("COMMAND", "COMMAND_CHAIN"),
+    CHAIN_COMMAND_BLOCK("COMMAND_CHAIN"),
     CHARCOAL(1, "COAL"),
     CHERRY_BOAT,
     CHERRY_BUTTON,
@@ -444,9 +460,9 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     CUT_COPPER_SLAB,
     CUT_COPPER_STAIRS,
     CUT_RED_SANDSTONE,
-    CUT_RED_SANDSTONE_SLAB("STONE_SLAB2"),
-    CUT_SANDSTONE,
-    CUT_SANDSTONE_SLAB(1, "STEP"),
+    @XInfo(since = "1.14") CUT_RED_SANDSTONE_SLAB,
+    @XInfo(since = "1.14") CUT_SANDSTONE,
+    @XInfo(since = "1.14") CUT_SANDSTONE_SLAB,
     CYAN_BANNER(6, "STANDING_BANNER", "BANNER"),
     CYAN_BED(supports(12) ? 9 : 0, "BED_BLOCK", "BED"),
     CYAN_BUNDLE,
@@ -467,7 +483,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     DANDELION("YELLOW_FLOWER"),
     DANGER_POTTERY_SHERD,
     DARK_OAK_BOAT("BOAT_DARK_OAK"),
-    DARK_OAK_BUTTON("WOOD_BUTTON"),
+    @XInfo(since = "1.13")
+    DARK_OAK_BUTTON,
     DARK_OAK_CHEST_BOAT,
     DARK_OAK_DOOR("DARK_OAK_DOOR", "DARK_OAK_DOOR_ITEM"),
     DARK_OAK_FENCE,
@@ -476,12 +493,12 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     DARK_OAK_LEAVES(1, "LEAVES_2"),
     DARK_OAK_LOG(1, "LOG_2"),
     DARK_OAK_PLANKS(5, "WOOD"),
-    DARK_OAK_PRESSURE_PLATE("WOOD_PLATE"),
+    @XInfo(since = "1.13") DARK_OAK_PRESSURE_PLATE,
     DARK_OAK_SAPLING(5, "SAPLING"),
-    DARK_OAK_SIGN("SIGN_POST", "SIGN"),
+    @XInfo(since = "1.13") DARK_OAK_SIGN,
     DARK_OAK_SLAB(5, "WOOD_DOUBLE_STEP", "WOOD_STEP", "WOODEN_SLAB"),
     DARK_OAK_STAIRS,
-    DARK_OAK_TRAPDOOR("TRAP_DOOR"),
+    @XInfo(since = "1.13") DARK_OAK_TRAPDOOR,
     DARK_OAK_WALL_HANGING_SIGN,
     DARK_OAK_WALL_SIGN("WALL_SIGN"),
     DARK_OAK_WOOD(1, "LOG_2"),
@@ -618,6 +635,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
      */
     FILLED_MAP("MAP"),
     FIRE,
+    @XInfo(since = "1.21.5")
+    FIREFLY_BUSH,
     FIREWORK_ROCKET("FIREWORK"),
     FIREWORK_STAR("FIREWORK_CHARGE"),
     FIRE_CHARGE("FIREBALL"),
@@ -785,7 +804,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     JIGSAW,
     JUKEBOX,
     JUNGLE_BOAT("BOAT_JUNGLE"),
-    JUNGLE_BUTTON("WOOD_BUTTON"),
+    @XInfo(since = "1.13")
+    JUNGLE_BUTTON,
     JUNGLE_CHEST_BOAT,
     JUNGLE_DOOR("JUNGLE_DOOR", "JUNGLE_DOOR_ITEM"),
     JUNGLE_FENCE,
@@ -794,12 +814,12 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     JUNGLE_LEAVES(3, "LEAVES"),
     JUNGLE_LOG(3, "LOG"),
     JUNGLE_PLANKS(3, "WOOD"),
-    JUNGLE_PRESSURE_PLATE("WOOD_PLATE"),
+    @XInfo(since = "1.13") JUNGLE_PRESSURE_PLATE,
     JUNGLE_SAPLING(3, "SAPLING"),
-    JUNGLE_SIGN("SIGN_POST", "SIGN"),
+    @XInfo(since = "1.13") JUNGLE_SIGN,
     JUNGLE_SLAB(3, "WOOD_DOUBLE_STEP", "WOOD_STEP", "WOODEN_SLAB"),
     JUNGLE_STAIRS("JUNGLE_WOOD_STAIRS"),
-    JUNGLE_TRAPDOOR("TRAP_DOOR"),
+    @XInfo(since = "1.13") JUNGLE_TRAPDOOR,
     JUNGLE_WALL_HANGING_SIGN,
     JUNGLE_WALL_SIGN("WALL_SIGN"),
     JUNGLE_WOOD(3, "LOG"),
@@ -817,6 +837,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     LAVA_BUCKET,
     LAVA_CAULDRON,
     LEAD("LEASH"),
+    @XInfo(since = "1.21.5")
+    LEAF_LITTER,
     LEATHER,
     LEATHER_BOOTS,
     LEATHER_CHESTPLATE,
@@ -1216,9 +1238,13 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     POTTED_WARPED_ROOTS,
     POTTED_WHITE_TULIP(6, "FLOWER_POT"),
     POTTED_WITHER_ROSE,
+    @Deprecated
     POTTERY_SHARD_ARCHER,
+    @Deprecated
     POTTERY_SHARD_ARMS_UP,
+    @Deprecated
     POTTERY_SHARD_PRIZE,
+    @Deprecated
     POTTERY_SHARD_SKULL,
     POWDER_SNOW,
     POWDER_SNOW_BUCKET,
@@ -1305,16 +1331,15 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
      * Data value 14 or 0
      */
     RED_BED(supports(12) ? 14 : 0, "BED_BLOCK", "BED"),
+
     RED_BUNDLE,
     RED_CANDLE,
     RED_CANDLE_CAKE,
     RED_CARPET(14, "CARPET"),
     RED_CONCRETE(14, "CONCRETE"),
     RED_CONCRETE_POWDER(14, "CONCRETE_POWDER"),
-    /**
-     * 1.13 renamed to ROSE_RED
-     * 1.14 renamed to RED_DYE
-     */
+    @XChange(version = "1.14", from = "ROSE_RED", to = "RED_DYE")
+    @XChange(version = "1.13", from = "INK_SACK", to = "ROSE_RED")
     RED_DYE(1, "INK_SACK", "ROSE_RED"),
     RED_GLAZED_TERRACOTTA,
     RED_MUSHROOM,
@@ -1366,6 +1391,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SCULK_SENSOR,
     SCULK_SHRIEKER,
     SCULK_VEIN,
+    @Deprecated
     SCUTE,
     SEAGRASS,
     SEA_LANTERN,
@@ -1377,6 +1403,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SHEEP_SPAWN_EGG(91, "MONSTER_EGG"),
     SHELTER_POTTERY_SHERD,
     SHIELD,
+    @XInfo(since = "1.21.5")
+    SHORT_DRY_GRASS,
     /**
      * 1.13.0: LONG_GRASS:1
      * 1.20.4: GRASS -> SHORT_GRASS
@@ -1405,9 +1433,9 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SMOOTH_QUARTZ,
     SMOOTH_QUARTZ_SLAB,
     SMOOTH_QUARTZ_STAIRS,
-    SMOOTH_RED_SANDSTONE(2, "RED_SANDSTONE"),
-    SMOOTH_RED_SANDSTONE_SLAB("STONE_SLAB2"),
-    SMOOTH_RED_SANDSTONE_STAIRS,
+    @XInfo(since = "1.14") SMOOTH_RED_SANDSTONE(2, "RED_SANDSTONE"),
+    @XInfo(since = "1.14") SMOOTH_RED_SANDSTONE_SLAB,
+    @XInfo(since = "1.14") SMOOTH_RED_SANDSTONE_STAIRS,
     SMOOTH_SANDSTONE(2, "SANDSTONE"),
     SMOOTH_SANDSTONE_SLAB,
     SMOOTH_SANDSTONE_STAIRS,
@@ -1437,7 +1465,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SPONGE,
     SPORE_BLOSSOM,
     SPRUCE_BOAT("BOAT_SPRUCE"),
-    SPRUCE_BUTTON("WOOD_BUTTON"),
+    @XInfo(since = "1.13")
+    SPRUCE_BUTTON,
     SPRUCE_CHEST_BOAT,
     SPRUCE_DOOR("SPRUCE_DOOR", "SPRUCE_DOOR_ITEM"),
     SPRUCE_FENCE,
@@ -1446,12 +1475,12 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SPRUCE_LEAVES(1, "LEAVES"),
     SPRUCE_LOG(1, "LOG"),
     SPRUCE_PLANKS(1, "WOOD"),
-    SPRUCE_PRESSURE_PLATE("WOOD_PLATE"),
+    @XInfo(since = "1.13") SPRUCE_PRESSURE_PLATE,
     SPRUCE_SAPLING(1, "SAPLING"),
-    SPRUCE_SIGN("SIGN_POST", "SIGN"),
+    @XInfo(since = "1.13") SPRUCE_SIGN,
     SPRUCE_SLAB(1, "WOOD_DOUBLE_STEP", "WOOD_STEP", "WOODEN_SLAB"),
     SPRUCE_STAIRS("SPRUCE_WOOD_STAIRS"),
-    SPRUCE_TRAPDOOR("TRAP_DOOR"),
+    SPRUCE_TRAPDOOR,
     SPRUCE_WALL_HANGING_SIGN,
     SPRUCE_WALL_SIGN("WALL_SIGN"),
     SPRUCE_WOOD(1, "LOG"),
@@ -1519,10 +1548,16 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     SWEET_BERRY_BUSH,
     TADPOLE_BUCKET,
     TADPOLE_SPAWN_EGG,
+    @XInfo(since = "1.21.5")
+    TALL_DRY_GRASS,
     TALL_GRASS(2, "DOUBLE_PLANT"),
     TALL_SEAGRASS,
     TARGET,
     TERRACOTTA("HARD_CLAY"),
+    @XInfo(since = "1.21.5")
+    TEST_BLOCK,
+    @XInfo(since = "1.21.5")
+    TEST_INSTANCE_BLOCK,
     TIDE_ARMOR_TRIM_SMITHING_TEMPLATE,
     TINTED_GLASS,
     TIPPED_ARROW,
@@ -1669,7 +1704,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     WHITE_CARPET("CARPET"),
     WHITE_CONCRETE("CONCRETE"),
     WHITE_CONCRETE_POWDER("CONCRETE_POWDER"),
-    WHITE_DYE(15, "INK_SACK", "BONE_MEAL"),
+    @XInfo(since = "1.14") WHITE_DYE,
     WHITE_GLAZED_TERRACOTTA,
     WHITE_SHULKER_BOX,
     WHITE_STAINED_GLASS("STAINED_GLASS"),
@@ -1678,6 +1713,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     WHITE_TULIP(6, "RED_ROSE"),
     WHITE_WALL_BANNER(15, "WALL_BANNER"),
     WHITE_WOOL("WOOL"),
+    @XInfo(since = "1.21.5")
+    WILDFLOWERS,
     WILD_ARMOR_TRIM_SMITHING_TEMPLATE,
     WIND_CHARGE,
     WITCH_SPAWN_EGG(66, "MONSTER_EGG"),

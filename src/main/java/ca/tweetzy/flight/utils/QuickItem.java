@@ -22,6 +22,7 @@ import ca.tweetzy.flight.comp.enums.CompMaterial;
 import ca.tweetzy.flight.comp.enums.ServerVersion;
 import ca.tweetzy.flight.hooks.PlaceholderAPIHook;
 import com.cryptomorin.xseries.XEnchantment;
+import com.cryptomorin.xseries.XItemFlag;
 import com.cryptomorin.xseries.profiles.builder.XSkull;
 import com.cryptomorin.xseries.profiles.objects.ProfileInputType;
 import com.cryptomorin.xseries.profiles.objects.Profileable;
@@ -74,6 +75,7 @@ public final class QuickItem {
     @Getter
     private String name;
 
+    @Getter
     private final List<String> lores = new ArrayList<>();
 
     private final Map<Enchantment, Integer> enchants = new HashMap<>();
@@ -295,13 +297,11 @@ public final class QuickItem {
      */
     public ItemStack make() {
         ItemStack compiledItem = this.item != null ? this.item.clone() : this.material.parseItem();
-        ItemMeta compiledMeta = compiledItem.getItemMeta();
-        if (compiledItem == null)
-            compiledMeta = Bukkit.getItemFactory().getItemMeta(compiledItem.getType());
+        ItemMeta compiledMeta = compiledItem != null && compiledItem.hasItemMeta() ? compiledItem.getItemMeta() : Bukkit.getItemFactory().getItemMeta(compiledItem.getType());
 
         // Override with given material
         if (this.material != null) {
-            compiledItem.setType(this.material.parseMaterial());
+            compiledItem.setType(this.material.get());
 
             if (ServerVersion.isServerVersionBelow(ServerVersion.V1_13))
                 compiledItem.setData(new MaterialData(this.material.parseMaterial(), this.material.getData()));
@@ -313,8 +313,8 @@ public final class QuickItem {
 
 
         if (this.glow && this.enchants.isEmpty()) {
-            compiledMeta.addEnchant(XEnchantment.UNBREAKING.getEnchant(), 1, true);
-            this.flags.add(ItemFlag.HIDE_ENCHANTS);
+            compiledMeta.addEnchant(XEnchantment.UNBREAKING.get(), 1, true);
+            this.flags.add(XItemFlag.HIDE_ENCHANTS.get());
         }
 
         for (final Map.Entry<Enchantment, Integer> entry : this.enchants.entrySet()) {
@@ -339,10 +339,12 @@ public final class QuickItem {
         if (!this.lores.isEmpty()) {
             final List<String> coloredLores = new ArrayList<>();
 
-            for (final String line : this.lores)
-                if (line != null)
+            for (final String line : this.lores) {
+                if (line != null) {
                     for (final String subLore : line.split("\n"))
                         coloredLores.add(Common.colorize("&7" + subLore));
+                }
+            }
 
             lore.addAll(coloredLores);
         }
@@ -350,12 +352,8 @@ public final class QuickItem {
         compiledMeta.setLore(lore);
 
         if (this.unbreakable) {
-            this.flags.add(ItemFlag.HIDE_ATTRIBUTES);
-            this.flags.add(ItemFlag.HIDE_UNBREAKABLE);
-
-            NBT.modify(this.item, nbt -> {
-                nbt.setByte("Unbreakable", (byte) 1);
-            });
+            this.flags.add(XItemFlag.HIDE_ATTRIBUTES.get());
+            this.flags.add(XItemFlag.HIDE_UNBREAKABLE.get());
         }
 
         if (this.hideTags)
@@ -365,15 +363,13 @@ public final class QuickItem {
 
         for (final ItemFlag flag : this.flags)
             try {
-
-
                 Multimap<Attribute, AttributeModifier> modifiers = compiledMeta.getAttributeModifiers();
                 if(modifiers == null) {
                     modifiers = HashMultimap.create();
                     compiledMeta.setAttributeModifiers(modifiers);
                 }
 
-                compiledMeta.addItemFlags(flag);
+                compiledMeta.addItemFlags(XItemFlag.of(flag).get());
             } catch (final Throwable t) {
             }
 
@@ -381,25 +377,28 @@ public final class QuickItem {
         if (this.amount != -1)
             compiledItem.setAmount(this.amount);
 
-        //
-        // From now on we have to re-set the item
-        //
-        // Set custom model data
         if (this.modelData != null && ServerVersion.isServerVersionAtLeast(ServerVersion.V1_14))
             try {
                 compiledMeta.setCustomModelData(this.modelData);
-            } catch (final Throwable t) {
+            } catch (final Throwable ignored) {
             }
 
         // Apply Bukkit metadata
         compiledItem.setItemMeta(compiledMeta);
 
-        for (final Map.Entry<String, String> entry : this.tags.entrySet()) {
-            NBT.modify(compiledItem, nbt -> {
-                nbt.setString(entry.getKey(), entry.getValue());
-            });
+        if (!this.tags.isEmpty()) {
+            for (final Map.Entry<String, String> entry : this.tags.entrySet()) {
+                NBT.modify(compiledItem, nbt -> {
+                    nbt.setString(entry.getKey(), entry.getValue());
+                });
+            }
         }
 
+        if (this.unbreakable) {
+            NBT.modify(this.item, nbt -> {
+                nbt.setByte("Unbreakable", (byte) 1);
+            });
+        }
 
         return compiledItem;
     }
