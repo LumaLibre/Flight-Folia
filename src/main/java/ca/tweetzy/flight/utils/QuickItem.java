@@ -461,12 +461,14 @@ public final class QuickItem {
      */
     public static QuickItem of(final ItemStack item) {
         final QuickItem builder = new QuickItem();
+        builder.item(item);
+
         final ItemMeta meta = item.hasItemMeta() ? item.getItemMeta() : Bukkit.getItemFactory().getItemMeta(item.getType());
 
 //        if (meta != null && meta.getLore() != null)
 //            builder.lore(meta.getLore());
 
-        return builder.item(item).meta(meta);
+        return builder.meta(meta);
     }
 
     /**
