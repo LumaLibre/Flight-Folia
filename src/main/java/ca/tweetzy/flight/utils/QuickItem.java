@@ -538,7 +538,7 @@ public final class QuickItem {
 
     @SneakyThrows
     public static ItemStack getItem(String string) {
-        return SerializeUtil.stringToItem(DataFixerUtil.fixUpItemData(NBT.parseNBT(string), DataFixerUtil.VERSION1_21_4, DataFixerUtil.VERSION1_21_5).toString());
+        return SerializeUtil.stringToItem(string);
     }
 
     public static ItemStack[] getItems(String string) {
