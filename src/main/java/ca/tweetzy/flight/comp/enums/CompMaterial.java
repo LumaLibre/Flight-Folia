@@ -29,8 +29,6 @@ import com.google.common.base.Enums;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.Color;
-import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.EntityType;
@@ -42,14 +40,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -325,7 +316,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     CARROTS("CARROT"),
     CARROT_ON_A_STICK("CARROT_STICK"),
     CARTOGRAPHY_TABLE,
-    CARVED_PUMPKIN,
+    CARVED_PUMPKIN("PUMPKIN"),
     CAT_SPAWN_EGG,
     CAULDRON("CAULDRON", "CAULDRON_ITEM"),
     /**
@@ -337,7 +328,6 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     CAVE_SPIDER_SPAWN_EGG(59, "MONSTER_EGG"),
     CAVE_VINES,
     CAVE_VINES_PLANT,
-    CHAIN,
     CHAINMAIL_BOOTS,
     CHAINMAIL_CHESTPLATE,
     CHAINMAIL_HELMET,
@@ -1808,6 +1798,83 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     ZOMBIE_WALL_HEAD(2, "SKULL", "SKULL_ITEM"),
     ZOMBIFIED_PIGLIN_SPAWN_EGG(57, "MONSTER_EGG", "ZOMBIE_PIGMAN_SPAWN_EGG"),
 
+    @XInfo(since = "1.21.9") ACACIA_SHELF,
+    @XInfo(since = "1.21.9") BAMBOO_SHELF,
+    @XInfo(since = "1.21.9") BIRCH_SHELF,
+    @XInfo(since = "1.21.9") CHERRY_SHELF,
+    @XInfo(since = "1.21.9") CRIMSON_SHELF,
+    @XInfo(since = "1.21.9") DARK_OAK_SHELF,
+    @XInfo(since = "1.21.9") JUNGLE_SHELF,
+    @XInfo(since = "1.21.9") MANGROVE_SHELF,
+    @XInfo(since = "1.21.9") OAK_SHELF,
+    @XInfo(since = "1.21.9") PALE_OAK_SHELF,
+    @XInfo(since = "1.21.9") SPRUCE_SHELF,
+    @XInfo(since = "1.21.9") WARPED_SHELF,
+    @XInfo(since = "1.21.9") COPPER_TORCH,
+    @XInfo(since = "1.21.9") COPPER_BARS,
+    @XInfo(since = "1.21.9") EXPOSED_COPPER_BARS,
+    @XInfo(since = "1.21.9") WEATHERED_COPPER_BARS,
+    @XInfo(since = "1.21.9") OXIDIZED_COPPER_BARS,
+    @XInfo(since = "1.21.9") WAXED_COPPER_BARS,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_COPPER_BARS,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_COPPER_BARS,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_COPPER_BARS,
+    @XInfo(since = "1.21.9")
+    @XChange(version = "1.21.9", from = "CHAIN", to = "IRON_CHAIN")
+    IRON_CHAIN("CHAIN"),
+    @XInfo(since = "1.21.9") COPPER_CHAIN,
+    @XInfo(since = "1.21.9") EXPOSED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") WEATHERED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") OXIDIZED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") WAXED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_COPPER_CHAIN,
+    @XInfo(since = "1.21.9") EXPOSED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") WEATHERED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") OXIDIZED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") WAXED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_LIGHTNING_ROD,
+    @XInfo(since = "1.21.9") COPPER_SWORD,
+    @XInfo(since = "1.21.9") COPPER_SHOVEL,
+    @XInfo(since = "1.21.9") COPPER_PICKAXE,
+    @XInfo(since = "1.21.9") COPPER_AXE,
+    @XInfo(since = "1.21.9") COPPER_HOE,
+    @XInfo(since = "1.21.9") COPPER_HELMET,
+    @XInfo(since = "1.21.9") COPPER_CHESTPLATE,
+    @XInfo(since = "1.21.9") COPPER_LEGGINGS,
+    @XInfo(since = "1.21.9") COPPER_BOOTS,
+    @XInfo(since = "1.21.9") COPPER_GOLEM_SPAWN_EGG,
+    @XInfo(since = "1.21.9") COPPER_HORSE_ARMOR,
+    @XInfo(since = "1.21.9") COPPER_NUGGET,
+    @XInfo(since = "1.21.9") COPPER_LANTERN,
+    @XInfo(since = "1.21.9") EXPOSED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") WEATHERED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") OXIDIZED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") WAXED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_COPPER_LANTERN,
+    @XInfo(since = "1.21.9") COPPER_CHEST,
+    @XInfo(since = "1.21.9") EXPOSED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") WEATHERED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") OXIDIZED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") WAXED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_COPPER_CHEST,
+    @XInfo(since = "1.21.9") COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") EXPOSED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") WEATHERED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") OXIDIZED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") WAXED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") WAXED_EXPOSED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") WAXED_WEATHERED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") WAXED_OXIDIZED_COPPER_GOLEM_STATUE,
+    @XInfo(since = "1.21.9") COPPER_WALL_TORCH,
+
     ;
 
 
@@ -1943,6 +2010,42 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
         return Optional.ofNullable(NAMES.get(name));
     }
 
+
+    /**
+     * Return true if the given block is air
+     */
+    public static boolean isAir(final Block block) {
+        return block == null || isAir(block.getType());
+    }
+
+    /**
+     * Returns if the given item stack is air
+     */
+    public static boolean isAir(@Nullable ItemStack item) {
+        if (item == null)
+            return true;
+
+        return isAir(item.getType());
+    }
+
+    /**
+     * Returns if the given material is air
+     */
+    public static boolean isAir(final Material material) {
+        return material == null || nameEquals(material, "AIR", "CAVE_AIR", "VOID_AIR", "LEGACY_AIR");
+    }
+
+    // Utility method for evaluating matches.
+    private static boolean nameEquals(final Material mat, final String... names) {
+        final String matName = mat.toString();
+
+        for (final String name : names)
+            if (matName.equals(name))
+                return true;
+
+        return false;
+    }
+
     /**
      * The current version of the server.
      *
@@ -2066,7 +2169,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
         byte data = (byte) (Data.ISFLAT || material.equals("MAP") || item.getType().getMaxDurability() > 0 ? 0 : item.getDurability());
 
         // Versions 1.9-1.12 didn't really use the items data value.
-        if (supports(9) && !supports(13) && item.hasItemMeta() && material.equals("MONSTER_EGG")) {
+        if (Data.SUPPORTS_SpawnEggMeta && !supports(13) && item.hasItemMeta() && material.equals("MONSTER_EGG")) {
             ItemMeta meta = item.getItemMeta();
             if (meta instanceof SpawnEggMeta) {
                 SpawnEggMeta egg = (SpawnEggMeta) meta;
@@ -2326,17 +2429,6 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     }
 
     /**
-     * Create a wool from dye of certain amount.
-     */
-    public static ItemStack makeWool(final Color color, final int amount) {
-        if (ServerVersion.isServerVersionAtLeast(ServerVersion.V1_13))
-            return new ItemStack(Material.valueOf(DyeColor.getByColor(color) + "_WOOL"), amount);
-
-        else
-            return new ItemStack(Material.valueOf("WOOL"), amount, DyeColor.getByColor(color).getWoolData());
-    }
-
-    /**
      * Parses an item from this CompMaterial.
      * Uses data values on older versions.
      *
@@ -2399,42 +2491,6 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
         }
         return Data.ISFLAT || item.getDurability() == this.data || item.getType().getMaxDurability() > 0;
     }
-
-    /**
-     * Return true if the given block is air
-     */
-    public static boolean isAir(final Block block) {
-        return block == null || isAir(block.getType());
-    }
-
-    /**
-     * Returns if the given item stack is air
-     */
-    public static boolean isAir(@Nullable ItemStack item) {
-        if (item == null)
-            return true;
-
-        return isAir(item.getType());
-    }
-
-    /**
-     * Returns if the given material is air
-     */
-    public static boolean isAir(final Material material) {
-        return material == null || nameEquals(material, "AIR", "CAVE_AIR", "VOID_AIR", "LEGACY_AIR");
-    }
-
-    // Utility method for evaluating matches.
-    private static boolean nameEquals(final Material mat, final String... names) {
-        final String matName = mat.toString();
-
-        for (final String name : names)
-            if (matName.equals(name))
-                return true;
-
-        return false;
-    }
-
 
     @Override
     public String[] getNames() {
@@ -2575,5 +2631,21 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
          * @since 3.0.0
          */
         private static final boolean ISFLAT = supports(13);
+
+        /**
+         * Added around Minecraft v1.11
+         */
+        private static final boolean SUPPORTS_SpawnEggMeta;
+
+        static {
+            boolean supportsSpawnEggMeta;
+            try {
+                Class.forName("org.bukkit.inventory.meta.SpawnEggMeta");
+                supportsSpawnEggMeta = true;
+            } catch (ClassNotFoundException ex) {
+                supportsSpawnEggMeta = false;
+            }
+            SUPPORTS_SpawnEggMeta = supportsSpawnEggMeta;
+        }
     }
 }

@@ -444,17 +444,6 @@ public final class QuickItem {
     }
 
     /**
-     * Convenience method to get a wool
-     *
-     * @param color the wool color
-     *
-     * @return the new item creator
-     */
-    public static QuickItem ofWool(final Color color) {
-        return of(CompMaterial.makeWool(color, 1)).color(color);
-    }
-
-    /**
      * Convenience method to get the creator of an existing itemstack
      *
      * @param item existing itemstack

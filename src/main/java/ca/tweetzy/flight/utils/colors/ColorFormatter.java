@@ -261,6 +261,9 @@ public final class ColorFormatter {
      */
     @Nonnull
     private static ChatColor[] createGradient(@Nonnull Color start, @Nonnull Color end, int step) {
+        // Clamp for divide safety
+        step = Math.max(step, 2);
+
         ChatColor[] colors = new ChatColor[step];
         int stepR = Math.abs(start.getRed() - end.getRed()) / (step - 1);
         int stepG = Math.abs(start.getGreen() - end.getGreen()) / (step - 1);
@@ -270,18 +273,16 @@ public final class ColorFormatter {
                 start.getGreen() < end.getGreen() ? +1 : -1,
                 start.getBlue() < end.getBlue() ? +1 : -1
         };
-
         for (int i = 0; i < step; i++) {
-            Color color = new Color(start.getRed() + ((stepR * i) * direction[0]), start.getGreen() + ((stepG * i) * direction[1]), start.getBlue() + ((stepB * i) * direction[2]));
-            if (SUPPORTS_RGB) {
-                colors[i] = ChatColor.of(color);
-            } else {
-                colors[i] = getClosestColor(color);
-            }
+            Color color = new Color(
+                    start.getRed() + ((stepR * i) * direction[0]),
+                    start.getGreen() + ((stepG * i) * direction[1]),
+                    start.getBlue() + ((stepB * i) * direction[2]));
+            colors[i] = SUPPORTS_RGB ? ChatColor.of(color) : getClosestColor(color);
         }
-
         return colors;
     }
+
 
     /**
      * Returns the closest legacy color from an rgb color
