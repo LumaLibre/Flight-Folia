@@ -1,3 +1,21 @@
+/*
+ * Flight
+ * Copyright 2022 Kiran Hart
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package ca.tweetzy.flight.gui;
 
 import ca.tweetzy.flight.comp.enums.CompMaterial;
@@ -25,80 +43,85 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-/**
- * The current file has been created by Kiran Hart
- * Date Created: March 02 2021
- * Time Created: 4:09 p.m.
- * Usage of any code found within this class is prohibited unless given explicit permission otherwise
- */
 public class Gui {
 
+    // Core inventory fields
     protected Inventory inventory;
     protected String title;
     protected GuiType inventoryType = GuiType.STANDARD;
     protected int rows;
     protected int page = 1;
     protected int pages = 1;
+
+    // Behavior flags
     protected boolean acceptsItems = false;
     protected boolean allowDropItems = true;
     protected boolean allowClose = true;
     protected boolean useLockedCells = false;
     protected boolean allowShiftClick = false;
+
+    // Slot management
     protected final Map<Integer, Boolean> unlockedCells = new HashMap<>();
     protected final Map<Integer, ItemStack> cellItems = new HashMap<>();
     protected final Map<Integer, Map<ClickType, Clickable>> conditionalButtons = new HashMap<>();
+
+    // Default items
     protected ItemStack blankItem = QuickItem.of(CompMaterial.BLACK_STAINED_GLASS_PANE).name(" ").lore(" ").make();
+    protected static final ItemStack AIR = CompMaterial.AIR.parseItem();
+
+    // Pagination items
     protected int nextPageIndex = -1, prevPageIndex = -1;
     protected ItemStack nextPageItem, prevPageItem;
     protected ItemStack nextPage, prevPage;
     protected Gui parent = null;
-    protected static ItemStack AIR = CompMaterial.AIR.parseItem();
 
-    protected GuiManager guiManager;
-    protected boolean open = false;
+    // Event handlers
     protected Clickable defaultClicker = null;
     protected Clickable privateDefaultClicker = null;
     protected Clickable playerInvClicker = null;
     protected Delayable delayClicker = null;
-
     protected Openable opener = null;
     protected Closable closer = null;
     protected Droppable dropper = null;
     protected Pagable pager = null;
+
+    // Sounds
     protected CompSound defaultSound = CompSound.UI_BUTTON_CLICK;
     protected CompSound navigateSound = CompSound.ENTITY_BAT_TAKEOFF;
 
-    // Click Delays
+    // Click delays
     protected final Map<Integer, Long> slotLastClicked = new HashMap<>();
     protected final Map<Integer, Long> slotClickDelays = new HashMap<>();
-
     protected long globalClickDelay = -1;
     protected long globalLastClicked = -1;
 
+    protected boolean open = false;
+    protected GuiManager guiManager;
+
+    // Constructors
     public Gui() {
         this.rows = 3;
     }
 
     public Gui(@NotNull GuiType type) {
         this.inventoryType = type;
-        switch (type) {
-            case HOPPER:
-            case DISPENSER:
-                this.rows = 1;
-                break;
-            default:
-                this.rows = 3;
-        }
+        this.rows = switch (type) {
+            case HOPPER, DISPENSER -> 1;
+            default -> 3;
+        };
     }
 
     public Gui(@Nullable Gui parent) {
-        this.parent = parent;
+        this(3, parent);
     }
 
     public Gui(int rows) {
@@ -110,9 +133,13 @@ public class Gui {
         this.rows = Math.max(1, Math.min(6, rows));
     }
 
+    // --------------------------------------
+    // Public API Methods
+    // --------------------------------------
+
     @NotNull
     public List<Player> getPlayers() {
-        return inventory == null ? Collections.EMPTY_LIST
+        return inventory == null ? Collections.emptyList()
                 : inventory.getViewers().stream()
                 .filter(e -> e instanceof Player)
                 .map(e -> (Player) e)
@@ -120,10 +147,7 @@ public class Gui {
     }
 
     public boolean isOpen() {
-        // double check
-        if (inventory != null && inventory.getViewers().isEmpty()) {
-            open = false;
-        }
+        if (inventory != null && inventory.getViewers().isEmpty()) open = false;
         return open;
     }
 
@@ -136,18 +160,10 @@ public class Gui {
         return this;
     }
 
-    /**
-     * If this is true, then items in the player's cursor when the GUI is closed
-     * will be cleared
-     */
     public boolean getAllowDrops() {
         return allowDropItems;
     }
 
-    /**
-     * Set if items in the player's cursor will be cleared when the GUI is
-     * closed
-     */
     public Gui setAllowDrops(boolean allow) {
         this.allowDropItems = allow;
         return this;
@@ -162,120 +178,28 @@ public class Gui {
         return this;
     }
 
-    public void setAllowShiftClick(boolean allowShiftClick) {
-        this.allowShiftClick = allowShiftClick;
-    }
-
     public boolean isAllowShiftClick() {
         return allowShiftClick;
     }
 
-    /**
-     * Close the GUI without calling onClose() and without opening any parent
-     * GUIs
-     */
-    public void exit() {
-        allowClose = true;
-        open = false;
-        inventory.getViewers().stream()
-                .filter(e -> e instanceof Player)
-                .map(e -> (Player) e)
-                .collect(Collectors.toList())
-                .forEach(Player::closeInventory);
-    }
-
-    /**
-     * Close the GUI as if the player closed it normally
-     */
-    public void close() {
-        allowClose = true;
-        inventory.getViewers().stream()
-                .filter(e -> e instanceof Player)
-                .map(e -> (Player) e)
-                .collect(Collectors.toList())
-                .forEach(Player::closeInventory);
-    }
-
-    @NotNull
-    public GuiType getType() {
-        return inventoryType;
-    }
-
-    @NotNull
-    public Gui setUnlocked(int cell) {
-        unlockedCells.put(cell, true);
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlocked(int row, int col) {
-        final int cell = col + row * inventoryType.columns;
-        unlockedCells.put(cell, true);
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlockedRange(int cellFirst, int cellLast) {
-        for (int cell = cellFirst; cell <= cellLast; ++cell) {
-            unlockedCells.put(cell, true);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlockedRange(int cellFirst, int cellLast, boolean open) {
-        for (int cell = cellFirst; cell <= cellLast; ++cell) {
-            unlockedCells.put(cell, open);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlockedRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast) {
-        final int last = cellColLast + cellRowLast * inventoryType.columns;
-        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
-            unlockedCells.put(cell, true);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlockedRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast, boolean open) {
-        final int last = cellColLast + cellRowLast * inventoryType.columns;
-        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
-            unlockedCells.put(cell, open);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlocked(int cell, boolean open) {
-        unlockedCells.put(cell, open);
-        return this;
-    }
-
-    @NotNull
-    public Gui setUnlocked(int row, int col, boolean open) {
-        final int cell = col + row * inventoryType.columns;
-        unlockedCells.put(cell, open);
-        return this;
+    public void setAllowShiftClick(boolean allowShiftClick) {
+        this.allowShiftClick = allowShiftClick;
     }
 
     @NotNull
     public Gui setTitle(String title) {
         if (title == null) title = "";
-        if (!title.equals(this.title)) {
+        if (!Objects.equals(title, this.title)) {
             this.title = title;
             if (inventory != null) {
-                // update active inventory
-                List<Player> toUpdate = getPlayers();
-                boolean isAllowClose = allowClose;
+                List<Player> viewers = getPlayers();
+                boolean prevAllowClose = allowClose;
                 exit();
-                Inventory oldInv = inventory;
+                Inventory old = inventory;
                 createInventory();
-                inventory.setContents(oldInv.getContents());
-                toUpdate.forEach(player -> player.openInventory(inventory));
-                allowClose = isAllowClose;
+                inventory.setContents(old.getContents());
+                viewers.forEach(p -> p.openInventory(inventory));
+                allowClose = prevAllowClose;
             }
         }
         return this;
@@ -287,13 +211,8 @@ public class Gui {
 
     @NotNull
     public Gui setRows(int rows) {
-        switch (inventoryType) {
-            case HOPPER:
-            case DISPENSER:
-                break;
-            default:
-                this.rows = Math.max(1, Math.min(6, rows));
-        }
+        if (inventoryType != GuiType.HOPPER && inventoryType != GuiType.DISPENSER)
+            this.rows = Math.max(1, Math.min(6, rows));
         return this;
     }
 
@@ -332,140 +251,97 @@ public class Gui {
         return blankItem;
     }
 
+    public Gui close() {
+        allowClose = true;
+        getPlayers().forEach(Player::closeInventory);
+        return this;
+    }
+
+    public Gui exit() {
+        allowClose = true;
+        open = false;
+        getPlayers().forEach(Player::closeInventory);
+        return this;
+    }
+
+    @Nullable
+    public Gui getParent() {
+        return parent;
+    }
+
+    @NotNull
+    public GuiType getType() {
+        return inventoryType;
+    }
+
+    @NotNull
+    public Gui setDefaultSound(CompSound sound) {
+        defaultSound = sound;
+        return this;
+    }
+
+    @NotNull
+    public Gui setNavigateSound(CompSound sound) {
+        navigateSound = sound;
+        return this;
+    }
+
+    public CompSound getDefaultSound() {
+        return defaultSound;
+    }
+
+    public CompSound getNavigateSound() {
+        return navigateSound;
+    }
+
+    public void setUseLockedCells(boolean useLockedCells) {
+        this.useLockedCells = useLockedCells;
+    }
+
+    public boolean isUseLockedCells() {
+        return useLockedCells;
+    }
+
+    // --------------------------------------
+    // Item and slot methods
+    // --------------------------------------
+
     @Nullable
     public ItemStack getItem(int cell) {
-        if (inventory != null && unlockedCells.getOrDefault(cell, false)) {
-            return inventory.getItem(cell);
-        }
-        return cellItems.get(cell);
+        return inventory != null && unlockedCells.getOrDefault(cell, false) ? inventory.getItem(cell) : cellItems.get(cell);
     }
 
     @Nullable
     public ItemStack getItem(int row, int col) {
-        final int cell = col + row * inventoryType.columns;
-        if (inventory != null && unlockedCells.getOrDefault(cell, false)) {
-            return inventory.getItem(cell);
-        }
-        return cellItems.get(cell);
+        return getItem(col + row * inventoryType.columns);
     }
 
     @NotNull
     public Gui setItem(int cell, @Nullable ItemStack item) {
         cellItems.put(cell, item);
-        if (inventory != null && cell >= 0 && cell < inventory.getSize()) {
-            inventory.setItem(cell, item);
-        }
+        if (inventory != null && cell >= 0 && cell < inventory.getSize()) inventory.setItem(cell, item);
         return this;
     }
 
     @NotNull
     public Gui setItem(int row, int col, @Nullable ItemStack item) {
-        final int cell = col + row * inventoryType.columns;
-        return setItem(cell, item);
+        return setItem(col + row * inventoryType.columns, item);
     }
 
     @NotNull
     public Gui setItems(int[] cells, @Nullable ItemStack item) {
-        for (int i : cells) {
-            cellItems.put(i, item);
-            if (inventory != null && i >= 0 && i < inventory.getSize()) {
-                inventory.setItem(i, item);
-            }
-        }
+        Arrays.stream(cells).forEach(i -> setItem(i, item));
         return this;
     }
 
     @NotNull
-    public Gui setItems(int cellFirst, int cellLast, @Nullable ItemStack item) {
-        for (int cell = cellFirst; cell <= cellLast; ++cell) {
-            setItem(cell, item);
-        }
+    public Gui setItems(int start, int end, @Nullable ItemStack item) {
+        IntStream.rangeClosed(start, end).forEach(i -> setItem(i, item));
         return this;
     }
 
     @NotNull
-    public Gui mirrorFill(int row, int col, boolean mirrorRow, boolean mirrorCol, ItemStack item) {
-        setItem(row, col, item);
-        if (mirrorRow)
-            setItem(rows - row - 1, col, item);
-        if (mirrorCol)
-            setItem(row, 8 - col, item);
-        if (mirrorRow && mirrorCol)
-            setItem(rows - row - 1, 8 - col, item);
-        return this;
-    }
-
-    @NotNull
-    public Gui setAction(int cell, @Nullable Clickable action) {
-        setConditional(cell, null, action);
-        return this;
-    }
-
-    @NotNull
-    public Gui setAction(int row, int col, @Nullable Clickable action) {
-        setConditional(col + row * inventoryType.columns, null, action);
-        return this;
-    }
-
-    @NotNull
-    public Gui setAction(int cell, @Nullable ClickType type, @Nullable Clickable action) {
-        setConditional(cell, type, action);
-        return this;
-    }
-
-    @NotNull
-    public Gui setAction(int row, int col, @Nullable ClickType type, @Nullable Clickable action) {
-        setConditional(col + row * inventoryType.columns, type, action);
-        return this;
-    }
-
-    @NotNull
-    public Gui setActionForRange(int cellFirst, int cellLast, @Nullable Clickable action) {
-        for (int cell = cellFirst; cell <= cellLast; ++cell) {
-            setConditional(cell, null, action);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setActionForRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast, @Nullable Clickable action) {
-        final int last = cellColLast + cellRowLast * inventoryType.columns;
-        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
-            setConditional(cell, null, action);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setActionForRange(int cellFirst, int cellLast, @Nullable ClickType type, @Nullable Clickable action) {
-        for (int cell = cellFirst; cell <= cellLast; ++cell) {
-            setConditional(cell, type, action);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setActionForRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast, @Nullable ClickType type, @Nullable Clickable action) {
-        final int last = cellColLast + cellRowLast * inventoryType.columns;
-        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
-            setConditional(cell, type, action);
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui clearActions(int cell) {
-        conditionalButtons.remove(cell);
-        return this;
-    }
-
-    @NotNull
-    public Gui clearActions(int row, int col) {
-        return clearActions(col + row * inventoryType.columns);
-    }
-
-    @NotNull
-    public Gui setButton(int cell, ItemStack item, @Nullable Clickable action) {
+    public Gui setButton(int cell, @Nullable ItemStack item, @Nullable Clickable action) {
         setItem(cell, item);
         setConditional(cell, null, action);
         return this;
@@ -473,10 +349,7 @@ public class Gui {
 
     @NotNull
     public Gui setButton(int row, int col, @Nullable ItemStack item, @Nullable Clickable action) {
-        final int cell = col + row * inventoryType.columns;
-        setItem(cell, item);
-        setConditional(cell, null, action);
-        return this;
+        return setButton(col + row * inventoryType.columns, item, action);
     }
 
     @NotNull
@@ -488,191 +361,130 @@ public class Gui {
 
     @NotNull
     public Gui setButton(int row, int col, @Nullable ItemStack item, @Nullable ClickType type, @Nullable Clickable action) {
-        final int cell = col + row * inventoryType.columns;
-        setItem(cell, item);
-        setConditional(cell, type, action);
+        return setButton(col + row * inventoryType.columns, item, type, action);
+    }
+
+    // --------------------------------------
+    // Unlock cells
+    // --------------------------------------
+
+    @NotNull
+    public Gui setUnlocked(int cell) {
+        unlockedCells.put(cell, true);
         return this;
     }
 
     @NotNull
-    public Gui setGlobalClickDelay(long delay) {
-        this.globalClickDelay = delay;
+    public Gui setUnlocked(int row, int col) {
+        return setUnlocked(col + row * inventoryType.columns);
+    }
+
+    @NotNull
+    public Gui setUnlocked(int cell, boolean open) {
+        unlockedCells.put(cell, open);
         return this;
     }
 
     @NotNull
-    public Gui setSlotClickDelay(int slot, long delay) {
-        this.slotClickDelays.put(slot, delay);
+    public Gui setUnlocked(int row, int col, boolean open) {
+        return setUnlocked(col + row * inventoryType.columns, open);
+    }
+
+    @NotNull
+    public Gui setUnlockedRange(int start, int end) {
+        return setUnlockedRange(start, end, true);
+    }
+
+    @NotNull
+    public Gui setUnlockedRange(int start, int end, boolean open) {
+        IntStream.rangeClosed(start, end).forEach(i -> unlockedCells.put(i, open));
         return this;
     }
 
     @NotNull
-    public Gui setSlotClickDelay(int row, int col, long delay) {
-        final int cell = col + row * inventoryType.columns;
-        this.slotClickDelays.put(cell, delay);
-        return this;
-    }
-
-    protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable action) {
-        Map<ClickType, Clickable> conditionals = conditionalButtons.computeIfAbsent(cell, k -> new HashMap<>());
-        conditionals.put(type, action);
+    public Gui setUnlockedRange(int rowStart, int colStart, int rowEnd, int colEnd) {
+        return setUnlockedRange(rowStart, colStart, rowEnd, colEnd, true);
     }
 
     @NotNull
-    public Gui setOnOpen(@Nullable Openable action) {
-        opener = action;
+    public Gui setUnlockedRange(int rowStart, int colStart, int rowEnd, int colEnd, boolean open) {
+        int last = colEnd + rowEnd * inventoryType.columns;
+        for (int i = colStart + rowStart * inventoryType.columns; i <= last; i++) unlockedCells.put(i, open);
         return this;
     }
 
-    @NotNull
-    public Gui setOnClose(@Nullable Closable action) {
-        closer = action;
-        return this;
-    }
-
-    @NotNull
-    public Gui setOnDrop(@Nullable Droppable action) {
-        dropper = action;
-        return this;
-    }
-
-    @NotNull
-    public Gui setOnPage(@Nullable Pagable action) {
-        pager = action;
-        return this;
-    }
-
-    public Gui setNextPage(ItemStack item) {
-        nextPage = item;
-        return this;
-    }
-
-    public Gui setPrevPage(ItemStack item) {
-        prevPage = item;
-        return this;
-    }
-
-    public void reset() {
-        if (inventory != null)
-            inventory.clear();
-
-        setActionForRange(0, 53, null);
-        cellItems.clear();
-        update();
-    }
-
-    @NotNull
-    public Gui setNextPage(int cell, @NotNull ItemStack item) {
-        nextPageItem = cellItems.get(cell);
-        nextPageIndex = cell;
-        nextPage = item;
-        if (page < pages) {
-            setButton(nextPageIndex, nextPage, ClickType.LEFT, (event) -> this.nextPage());
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setNextPage(int row, int col, @NotNull ItemStack item) {
-        return setNextPage(col + row * inventoryType.columns, item);
-    }
-
-    @NotNull
-    public Gui setPrevPage(int cell, @NotNull ItemStack item) {
-        prevPageItem = cellItems.get(cell);
-        prevPageIndex = cell;
-        prevPage = item;
-        if (page > 1) {
-            setButton(prevPageIndex, prevPage, ClickType.LEFT, (event) -> this.prevPage());
-        }
-        return this;
-    }
-
-    @NotNull
-    public Gui setPrevPage(int row, int col, @NotNull ItemStack item) {
-        return setPrevPage(col + row * inventoryType.columns, item);
-    }
+    // --------------------------------------
+    // Pagination
+    // --------------------------------------
 
     public void setPages(int pages) {
         this.pages = Math.max(1, pages);
-        if (page > pages) {
-            setPage(pages);
-        }
+        if (page > pages) setPage(pages);
     }
 
     public void setPage(int page) {
-        int lastPage = this.page;
-        this.page = Math.max(1, Math.min(pages, page));
-        if (pager != null && this.page != lastPage) {
-            pager.onPageChange(new GuiPageEvent(this, guiManager, lastPage, page));
-            // page markers
-            updatePageNavigation();
-        }
+        changePage(page - this.page);
     }
 
     public void changePage(int direction) {
+        setPageInternal(this.page + direction);
+    }
+
+    private void setPageInternal(int newPage) {
         int lastPage = page;
-        this.page = Math.max(1, Math.min(pages, page + direction));
-        if (pager != null && this.page != lastPage) {
+        page = Math.max(1, Math.min(pages, newPage));
+        if (pager != null && page != lastPage) {
             pager.onPageChange(new GuiPageEvent(this, guiManager, lastPage, page));
-            // page markers
             updatePageNavigation();
         }
     }
 
+    /**
+     * Set a listener for page change events.
+     * Called when the page is changed using next/prev or setPage().
+     */
+    @NotNull
+    public Gui setOnPage(@Nullable Pagable pager) {
+        this.pager = pager;
+        return this;
+    }
+
     public void nextPage() {
-        if (page < pages) {
-            int lastPage = page;
-            ++page;
-            // page switch events
-            if (pager != null) {
-                pager.onPageChange(new GuiPageEvent(this, guiManager, lastPage, page));
-
-                // page markers
-                updatePageNavigation();
-
-                // push new inventory to the view inventory
-                // shouldn't be needed since adding inventory update to setItem
-                //update();
-            }
-        }
+        if (page < pages) setPageInternal(page + 1);
     }
 
     public void prevPage() {
-        if (page > 1) {
-            int lastPage = page;
-            --page;
-            if (pager != null) {
-                pager.onPageChange(new GuiPageEvent(this, guiManager, lastPage, page));
+        if (page > 1) setPageInternal(page - 1);
+    }
 
-                // page markers
-                updatePageNavigation();
+    public void setNextPage(int cell, @NotNull ItemStack item) {
+        nextPageIndex = cell;
+        nextPage = item;
+        if (page < pages) setButton(cell, item, ClickType.LEFT, e -> nextPage());
+    }
 
-                // push new inventory to the view inventory
-                // shouldn't be needed since adding inventory update to setItem
-                //update();
-            }
-        }
+    public void setNextPage(int row, int col, @NotNull ItemStack item) {
+        setNextPage(col + row * inventoryType.columns, item);
+    }
+
+    public void setPrevPage(int cell, @NotNull ItemStack item) {
+        prevPageIndex = cell;
+        prevPage = item;
+        if (page > 1) setButton(cell, item, ClickType.LEFT, e -> prevPage());
+    }
+
+    public void setPrevPage(int row, int col, @NotNull ItemStack item) {
+        setPrevPage(col + row * inventoryType.columns, item);
     }
 
     protected void updatePageNavigation() {
-        if (prevPage != null) {
-            if (page > 1) {
-                this.setButton(prevPageIndex, prevPage, ClickType.LEFT, (event) -> this.prevPage());
-            } else {
-                this.setItem(prevPageIndex, prevPageItem);
-                this.clearActions(prevPageIndex);
-            }
-        }
-        if (nextPage != null) {
-            if (pages > 1 && page != pages) {
-                this.setButton(nextPageIndex, nextPage, ClickType.LEFT, (event) -> this.nextPage());
-            } else {
-                this.setItem(nextPageIndex, nextPageItem);
-                this.clearActions(nextPageIndex);
-            }
-        }
+        if (prevPage != null) setButton(prevPageIndex, page > 1 ? prevPage : prevPageItem, ClickType.LEFT, page > 1 ? e -> prevPage() : null);
+        if (nextPage != null) setButton(nextPageIndex, page < pages ? nextPage : nextPageItem, ClickType.LEFT, page < pages ? e -> nextPage() : null);
     }
+
+    // --------------------------------------
+    // Inventory creation
+    // --------------------------------------
 
     @NotNull
     protected Inventory getOrCreateInventory(@NotNull GuiManager manager) {
@@ -682,163 +494,111 @@ public class Gui {
     @NotNull
     protected Inventory generateInventory(@NotNull GuiManager manager) {
         this.guiManager = manager;
-        final int cells = rows * inventoryType.columns;
-
         createInventory();
-        for (int i = 0; i < cells; ++i) {
-            final ItemStack item = cellItems.get(i);
-//            inventory.setItem(i, item != null ? item : (getDefaultItem()));
-            this.inventory.setItem(i, item != null ? item : (this.unlockedCells.getOrDefault(i, false) ? AIR : this.blankItem));
-        }
+        int size = rows * inventoryType.columns;
+        for (int i = 0; i < size; i++) inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
         return inventory;
     }
 
     protected void createInventory() {
-        final InventoryType t = inventoryType == null ? InventoryType.CHEST : inventoryType.type;
+        InventoryType type = inventoryType == null ? InventoryType.CHEST : inventoryType.type;
+        GuiHolder holder = new GuiHolder(guiManager, this);
+        if (type == InventoryType.HOPPER || type == InventoryType.DISPENSER)
+            inventory = holder.newInventory(type, title == null ? "" : Common.colorize(trimTitle(title)));
+        else
+            inventory = holder.newInventory(rows * 9, title == null ? "" : Common.colorize(trimTitle(title)));
+    }
 
-        switch (t) {
-            case DISPENSER:
-            case HOPPER:
-                inventory = new GuiHolder(guiManager, this).newInventory(t, title == null ? "" : Common.colorize(trimTitle(title)));
-                break;
-            default:
-                inventory = new GuiHolder(guiManager, this).newInventory(rows * 9, title == null ? "" : Common.colorize(trimTitle(title)));
+    // --------------------------------------
+    // Event handling
+    // --------------------------------------
+
+    protected boolean onClick(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
+        int cell = event.getSlot();
+        Map<ClickType, Clickable> conditionals = conditionalButtons.get(cell);
+
+        Clickable button = null;
+        if (conditionals != null) button = conditionals.getOrDefault(event.getClick(), conditionals.get(null));
+
+        if (button != null) {
+            long now = System.currentTimeMillis();
+
+            // Global click delay
+            if (globalClickDelay != -1 && globalLastClicked != -1 && now - globalLastClicked < globalClickDelay) {
+                if (delayClicker != null) delayClicker.onClick(globalLastClicked, globalClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                return false;
+            }
+            globalLastClicked = now;
+
+            // Slot click delay
+            long slotDelay = slotClickDelays.getOrDefault(cell, -1L);
+            long lastSlotClick = slotLastClicked.getOrDefault(cell, -1L);
+            if (slotDelay != -1 && lastSlotClick != -1 && now - lastSlotClick < slotDelay) {
+                if (delayClicker != null) delayClicker.onClick(lastSlotClick, slotDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                return false;
+            }
+            slotLastClicked.put(cell, now);
+
+            button.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+            return true;
+        } else {
+            if (defaultClicker != null) defaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+            else if (privateDefaultClicker != null) privateDefaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+            return button != null;
         }
     }
 
-    @Nullable
-    public Gui getParent() {
-        return parent;
-    }
-
-    public void update() {
-        if (inventory == null)
-            return;
-
-        final int cells = rows * inventoryType.columns;
-        for (int i = 0; i < cells; ++i) {
-            final ItemStack item = cellItems.get(i);
-//            inventory.setItem(i, item != null ? item : (getDefaultItem()));
-            this.inventory.setItem(i, item != null ? item : (this.unlockedCells.getOrDefault(i, false) ? AIR : this.blankItem));
-        }
-    }
-
-    protected static String trimTitle(String title) {
-        if (title == null) {
-            return "";
-        } else if (ServerVersion.isServerVersionAtOrBelow(ServerVersion.V1_8) && title.length() > 32) {
-            return title.charAt(30) == '\u00A7' ? title.substring(0, 30) : title.substring(0, 31);
-        }
-        return title;
+    protected boolean onClickPlayerInventory(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory openInv, @NotNull InventoryClickEvent event) {
+        if (playerInvClicker == null) return false;
+        playerInvClicker.onClick(new GuiClickEvent(manager, this, player, event, event.getSlot(), true));
+        return true;
     }
 
     protected boolean onClickOutside(@NotNull GuiManager manager, @NotNull Player player, @NotNull InventoryClickEvent event) {
         return dropper == null || dropper.onDrop(new GuiDropItemEvent(manager, this, player, event));
     }
 
-    protected void onClickDelay(Player player, int slot, long remaining) {}
-
-    protected boolean onClick(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
-        final int cell = event.getSlot();
-        Map<ClickType, Clickable> conditionals = conditionalButtons.get(cell);
-
-        // individual slot click delays
-        long slotClickDelay = this.slotClickDelays.getOrDefault(cell, -1L);
-        long slotLastClicked = this.slotLastClicked.getOrDefault(cell,-1L);
-
-        Clickable button;
-        if (conditionals != null && ((button = conditionals.get(event.getClick())) != null || (button = conditionals.get(null)) != null)) {
-            if (this.globalClickDelay != -1) {
-                if (this.globalLastClicked == -1 || (System.currentTimeMillis() - this.globalLastClicked) > this.globalClickDelay) {
-                    this.globalLastClicked = System.currentTimeMillis();
-                } else {
-                    if (this.delayClicker != null) {
-                        this.delayClicker.onClick(this.globalLastClicked, this.globalClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
-                    }
-                    return false;//todo call delay event
-                }
-            }
-
-            if (slotClickDelay != -1) {
-                if (slotLastClicked == -1 || (System.currentTimeMillis() - slotLastClicked) > slotClickDelay) {
-                    this.slotLastClicked.put(cell, System.currentTimeMillis());
-                } else {
-                    if (this.delayClicker != null) {
-                        this.delayClicker.onClick(slotLastClicked, slotClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
-                    }
-                    return false;
-                }
-            }
-
-            button.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
-        } else {
-            // no event for this button
-            if (defaultClicker != null) {
-                // this is a default action, not a triggered action
-                defaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
-                return true;
-            }
-            if (privateDefaultClicker != null) {
-                // this is a private default action, not a triggered action
-                privateDefaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
-                return true;
-            }
-
-            return false;
-        }
-        return true;
-    }
-
-    protected boolean onClickPlayerInventory(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory openInv, @NotNull InventoryClickEvent event) {
-        if (playerInvClicker == null) return false;
-
-        playerInvClicker.onClick(new GuiClickEvent(manager, this, player, event, event.getSlot(), true));
-        return true;
-    }
-
-    public void onOpen(@NotNull GuiManager manager, @NotNull Player player) {
+    protected void onOpen(@NotNull GuiManager manager, @NotNull Player player) {
         open = true;
         guiManager = manager;
-        if (opener != null) {
-            opener.onOpen(new GuiOpenEvent(manager, this, player));
-        }
+        if (opener != null) opener.onOpen(new GuiOpenEvent(manager, this, player));
     }
 
-    public void onClose(@NotNull GuiManager manager, @NotNull Player player) {
+    protected void onClose(@NotNull GuiManager manager, @NotNull Player player) {
         if (!allowClose) {
             manager.showGUI(player, this);
             return;
         }
         boolean showParent = open && parent != null;
-        if (closer != null) {
-            closer.onClose(new GuiCloseEvent(manager, this, player));
-        }
-        if (showParent) {
-            manager.showGUI(player, parent);
-        }
+        if (closer != null) closer.onClose(new GuiCloseEvent(manager, this, player));
+        if (showParent) manager.showGUI(player, parent);
     }
 
-    public CompSound getDefaultSound() {
-        return defaultSound;
+    public void update() {
+        if (inventory == null) return;
+        int size = rows * inventoryType.columns;
+        for (int i = 0; i < size; i++) inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
     }
 
-    public void setDefaultSound(CompSound sound) {
-        defaultSound = sound;
+    public void reset() {
+        if (inventory != null) inventory.clear();
+        cellItems.clear();
+        unlockedCells.clear();
+        conditionalButtons.clear();
+        page = 1;
     }
 
-    public CompSound getNavigateSound() {
-        return this.navigateSound;
+    // --------------------------------------
+    // Utility
+    // --------------------------------------
+
+    private static String trimTitle(String title) {
+        if (title == null) return "";
+        int maxLength = ServerVersion.isServerVersionAtLeast(ServerVersion.V1_14) ? 32 : 16;
+        return title.length() > maxLength ? title.substring(0, maxLength) : title;
     }
 
-    public void setNavigateSound(CompSound sound) {
-        this.navigateSound = sound;
-    }
-
-    public void setUseLockedCells(boolean useLockedCells) {
-        this.useLockedCells = useLockedCells;
-    }
-
-    public boolean isUseLockedCells() {
-        return useLockedCells;
+    protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable clicker) {
+        conditionalButtons.computeIfAbsent(cell, k -> new HashMap<>()).put(type, clicker);
     }
 }
