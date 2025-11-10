@@ -37,6 +37,6 @@ public final class PlaceholderAPIHook {
     }
 
     public List<String> tryReplace(@NonNull final Player player, @NonNull final List<String> messages) {
-        return messages.stream().map(line -> tryReplace(player, line)).collect(Collectors.toList());
+        return messages.stream().map(line -> tryReplace(player, line)).toList();
     }
 }

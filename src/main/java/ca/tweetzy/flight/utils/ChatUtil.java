@@ -30,7 +30,7 @@ import org.apache.commons.lang.WordUtils;
  */
 public final class ChatUtil {
 
-    private final static int CENTER_PX = 154;
+    private static final int CENTER_PX = 154;
 
     /**
      * It takes an enum and returns a string with the first letter of each word capitalized
@@ -64,6 +64,7 @@ public final class ChatUtil {
     public static String capitalize(final Enum<?> enumeration) {
         return capitalize(enumeration.name());
     }
+    
 
     /**
      * It takes a string, formats it, and then capitalizes the first letter
@@ -107,15 +108,19 @@ public final class ChatUtil {
      */
     public static String centerMessage(String message) {
         String[] lines = Common.colorize(message).split("\n", 40);
-        StringBuilder returnMessage = new StringBuilder();
-
+        int totalLength = 0;
+        for (String line : lines) {
+            totalLength += line.length() + 50; // Estimate: line + spaces + newline
+        }
+        StringBuilder returnMessage = new StringBuilder(totalLength);
 
         for (String line : lines) {
             int messagePxSize = 0;
             boolean previousCode = false;
             boolean isBold = false;
 
-            for (char c : line.toCharArray()) {
+            char[] chars = line.toCharArray();
+            for (char c : chars) {
                 if (c == '§') {
                     previousCode = true;
                 } else if (previousCode) {
@@ -123,19 +128,17 @@ public final class ChatUtil {
                     isBold = c == 'l';
                 } else {
                     DefaultFontInfo dFI = DefaultFontInfo.getDefaultFontInfo(c);
-                    messagePxSize = isBold ? messagePxSize + dFI.getBoldLength() : messagePxSize + dFI.getLength();
+                    messagePxSize += isBold ? dFI.getBoldLength() : dFI.getLength();
                     messagePxSize++;
                 }
             }
             int toCompensate = CENTER_PX - messagePxSize / 2;
             int spaceLength = DefaultFontInfo.SPACE.getLength() + 1;
-            int compensated = 0;
-            StringBuilder sb = new StringBuilder();
-            while (compensated < toCompensate) {
-                sb.append(" ");
-                compensated += spaceLength;
+            int spacesNeeded = Math.max(0, toCompensate / spaceLength);
+            for (int i = 0; i < spacesNeeded; i++) {
+                returnMessage.append(" ");
             }
-            returnMessage.append(sb.toString()).append(line).append("\n");
+            returnMessage.append(line).append("\n");
         }
 
         return returnMessage.toString();
@@ -240,8 +243,8 @@ public final class ChatUtil {
         SPACE(' ', 3),
         DEFAULT('a', 4);
 
-        private char character;
-        private int length;
+        private final char character;
+        private final int length;
 
         DefaultFontInfo(char character, int length) {
             this.character = character;
@@ -257,15 +260,21 @@ public final class ChatUtil {
         }
 
         public int getBoldLength() {
-            if (this == DefaultFontInfo.SPACE) return this.getLength();
+            if (this == SPACE) return this.getLength();
             return this.length + 1;
         }
 
-        public static DefaultFontInfo getDefaultFontInfo(char c) {
+        // Cache for O(1) lookup instead of O(n) iteration
+        private static final java.util.Map<Character, DefaultFontInfo> CHAR_TO_FONT = new java.util.HashMap<>();
+        
+        static {
             for (DefaultFontInfo dFI : DefaultFontInfo.values()) {
-                if (dFI.getCharacter() == c) return dFI;
+                CHAR_TO_FONT.put(dFI.getCharacter(), dFI);
             }
-            return DefaultFontInfo.DEFAULT;
+        }
+        
+        public static DefaultFontInfo getDefaultFontInfo(char c) {
+            return CHAR_TO_FONT.getOrDefault(c, DEFAULT);
         }
     }
 

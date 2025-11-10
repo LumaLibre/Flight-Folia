@@ -18,21 +18,11 @@
 
 package ca.tweetzy.flight.utils;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.Getter;
-
 /**
  * Date Created: April 10 2022
  * Time Created: 12:38 p.m.
  *
  * @author Kiran Hart
  */
-@Getter
-@AllArgsConstructor
-@Data
-public class Pair<K, V> {
-
-    private final K first;
-    private final V second;
+public record Pair<K, V>(K first, V second) {
 }

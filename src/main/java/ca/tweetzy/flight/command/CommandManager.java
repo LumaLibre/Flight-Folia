@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  */
 public final class CommandManager implements CommandExecutor, TabCompleter {
 
-    private final HashMap<String, NestedCommand> commands = new HashMap<>();
+    private final Map<String, NestedCommand> commands = new HashMap<>();
 
     @Setter
     private String playerOnlyMessage = "&cOnly players can use this command!";
@@ -60,7 +60,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
     private String unknownCommandMessage = "&cThat command does not exist!";
 
     @Setter
-    private List<String> syntaxErrorMessages = Arrays.asList(
+    private List<String> syntaxErrorMessages = List.of(
             "&8&m-----------------------------------------------------",
             "<center>%pl_name%",
             "<center>&cSeems like you entered that command incorrectly.",
@@ -260,7 +260,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
                         .filter(e -> e.getKey().startsWith(arg))
                         .filter(e -> op || e.getValue().getPermissionNode() == null || sender.hasPermission(e.getValue().getPermissionNode()))
                         .map(Map.Entry::getKey)
-                        .collect(Collectors.toList());
+                        .toList();
             }
 
             // more than one arg, let's check to see if we have a command here
@@ -317,7 +317,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
     }
 
     private void processRequirements(Command command, CommandSender sender, String[] args) {
-        if (sender instanceof Player && command.getAllowedExecutor() == AllowedExecutor.CONSOLE) {
+            if (sender instanceof Player && command.getAllowedExecutor() == AllowedExecutor.CONSOLE) {
             Common.tell(sender, consoleOnlyMessage);
             return;
         }
@@ -430,7 +430,8 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
         CommandMap commandMap = getCommandMap();
         Map<String, org.bukkit.command.Command> knownCmds = getKnownCommands(commandMap);
 
-        HashMap<String, org.bukkit.command.Command> commandsToCheck = new HashMap<>();
+        int estimatedSize = cmds.size() * 3; // label + name + average 1 alias
+        HashMap<String, org.bukkit.command.Command> commandsToCheck = new HashMap<>(estimatedSize);
 
         for (org.bukkit.command.Command c : cmds) {
             commandsToCheck.put(c.getLabel().toLowerCase(), c);
@@ -444,12 +445,8 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
                 mappedCommand.unregister(commandMap);
                 knownCmds.remove(check.getKey());
                 changed = true;
-            } else if (check.getValue() instanceof PluginCommand) {
-                PluginCommand checkPCmd = (PluginCommand) check.getValue();
-
-                if (mappedCommand instanceof PluginCommand) {
-
-                    PluginCommand mappedPCmd = (PluginCommand) mappedCommand;
+                } else if (check.getValue() instanceof PluginCommand checkPCmd) {
+                if (mappedCommand instanceof PluginCommand mappedPCmd) {
                     CommandExecutor mappedExec = mappedPCmd.getExecutor();
 
                     if (mappedExec != null && mappedExec.equals(checkPCmd.getExecutor())) {

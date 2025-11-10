@@ -18,6 +18,6 @@ public final class TranslationEntry {
     }
 
     public List<String> list() {
-        return Arrays.asList(contents);
+        return List.of(contents);
     }
 }

@@ -32,7 +32,7 @@ public final class MathUtil {
     /**
      * Holds all valid roman numbers
      */
-    private final static NavigableMap<Integer, String> romanNumbers = new TreeMap<>();
+    private static final NavigableMap<Integer, String> romanNumbers = new TreeMap<>();
 
     // Load the roman numbers
     static {
@@ -59,6 +59,9 @@ public final class MathUtil {
      * @return true if it's an integer
      */
     public static boolean isInt(final String s) {
+        if (s == null || s.isEmpty()) {
+            return false;
+        }
         try {
             Integer.parseInt(s);
             return true;
@@ -75,6 +78,9 @@ public final class MathUtil {
      * @return true if it's a double
      */
     public static boolean isDouble(final String s) {
+        if (s == null || s.isEmpty()) {
+            return false;
+        }
         try {
             Double.parseDouble(s);
             return true;

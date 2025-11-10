@@ -55,7 +55,7 @@ public abstract class PagedGUI<T> extends BaseGUI {
         handleTitle();
 
         if (this.items != null) {
-            final List<T> itemsToFill = this.items.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).collect(Collectors.toList());
+            final List<T> itemsToFill = this.items.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).toList();
             pages = (int) Math.max(1, Math.ceil(this.items.size() / (double) this.fillSlots().size()));
 
             setPrevPage(getPreviousButtonSlot(), getPreviousButton());

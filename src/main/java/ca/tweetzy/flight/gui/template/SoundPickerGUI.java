@@ -54,7 +54,7 @@ public final class SoundPickerGUI extends BaseGUI {
 
 
     public SoundPickerGUI(final Gui parent, final String titleOverride, final String searchQuery, final String inputTitle, final String inputSubtitle, @NonNull final BiConsumer<GuiClickEvent, CompSound> selected) {
-        super(parent, titleOverride == null ? "&eSound Selector" : Common.colorize(titleOverride));
+        super(parent, titleOverride == null ? "&eSound Selector" : Common.colorize(titleOverride), 6);
         this.searchQuery = searchQuery;
         this.inputTitle = inputTitle;
         this.inputSubtitle = inputSubtitle;
@@ -79,12 +79,12 @@ public final class SoundPickerGUI extends BaseGUI {
     protected void draw() {
         reset();
 
-        List<CompSound> validSounds = Arrays.asList(CompSound.values());
+        List<CompSound> validSounds = List.of(CompSound.values());
         if (this.searchQuery != null) {
-            validSounds = validSounds.stream().filter(mat -> Common.match(this.searchQuery, mat.name()) || Common.match(this.searchQuery, Inflector.getInstance().pluralize(mat.name()))).collect(Collectors.toList());
+            validSounds = validSounds.stream().filter(mat -> Common.match(this.searchQuery, mat.name()) || Common.match(this.searchQuery, Inflector.getInstance().pluralize(mat.name()))).toList();
         }
 
-        final List<CompSound> itemsToFill = validSounds.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).collect(Collectors.toList());
+        final List<CompSound> itemsToFill = validSounds.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).toList();
         pages = (int) Math.max(1, Math.ceil(validSounds.size() / (double) this.fillSlots().size()));
 
         setPrevPage(5, 3, this.getPreviousButton());

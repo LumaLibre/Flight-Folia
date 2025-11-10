@@ -24,11 +24,15 @@ import org.bukkit.ChatColor;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
-import java.util.regex.Matcher;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 @UtilityClass
 public final class Filterer {
+
+    // Cache compiled patterns for better performance
+    private static final Map<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Returns true if the phrase matches the item name, pluralized item name, singularized item name, item lore, or item enchantments.
@@ -39,9 +43,10 @@ public final class Filterer {
      * @return A boolean value.
      */
     public boolean searchByItemInfo(@NonNull final String phrase, @NonNull final ItemStack stack) {
+        Inflector inflector = Inflector.getInstance();
         return match(phrase, ItemUtil.getItemName(stack)) ||
-                match(phrase, Inflector.getInstance().pluralize(stack.getType().name())) ||
-                match(phrase, Inflector.getInstance().singularize(stack.getType().name())) ||
+                match(phrase, inflector.pluralize(stack.getType().name())) ||
+                match(phrase, inflector.singularize(stack.getType().name())) ||
                 match(phrase, ItemUtil.getItemLore(stack)) ||
                 match(phrase, ItemUtil.getItemEnchantments(stack));
     }
@@ -55,9 +60,13 @@ public final class Filterer {
      * @return whether the keyword is found
      */
     public boolean match(String pattern, String sentence) {
-        final Pattern patt = Pattern.compile(ChatColor.stripColor(pattern), Pattern.CASE_INSENSITIVE);
-        final Matcher matcher = patt.matcher(sentence);
-        return matcher.find();
+        if (pattern == null || sentence == null) {
+            return false;
+        }
+        String strippedPattern = ChatColor.stripColor(pattern);
+        Pattern patt = PATTERN_CACHE.computeIfAbsent(strippedPattern, 
+            p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE));
+        return patt.matcher(sentence).find();
     }
 
     /**

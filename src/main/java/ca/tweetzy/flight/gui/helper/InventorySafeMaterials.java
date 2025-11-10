@@ -60,6 +60,6 @@ public final class InventorySafeMaterials {
 
         }
 
-        return list.stream().sorted(Comparator.comparing(CompMaterial::name)).collect(Collectors.toList());
+        return list.stream().sorted(Comparator.comparing(CompMaterial::name)).toList();
     }
 }

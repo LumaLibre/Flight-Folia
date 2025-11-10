@@ -75,6 +75,6 @@ public final class Replacer {
     }
 
     public List<String> replaceVariables(final List<String> list, Object... replacements) {
-        return list.stream().map(item -> replaceVariables(item, replacements)).collect(Collectors.toList());
+        return list.stream().map(item -> replaceVariables(item, replacements)).toList();
     }
 }

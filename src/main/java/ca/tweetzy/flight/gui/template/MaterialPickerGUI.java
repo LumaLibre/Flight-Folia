@@ -55,7 +55,7 @@ public class MaterialPickerGUI extends BaseGUI {
 
 
     public MaterialPickerGUI(final Gui parent, final String titleOverride, final String searchQuery, final String inputTitle, final String inputSubtitle, @NonNull final BiConsumer<GuiClickEvent, ItemStack> selected) {
-        super(parent, titleOverride == null ? "&eMaterial Selector" : titleOverride);
+        super(parent, titleOverride == null ? "&eMaterial Selector" : titleOverride, 6);
         this.searchQuery = searchQuery;
         this.inputTitle = inputTitle;
         this.inputSubtitle = inputSubtitle;
@@ -80,7 +80,7 @@ public class MaterialPickerGUI extends BaseGUI {
     protected void draw() {
         reset();
 
-        List<ItemStack> validMaterials = InventorySafeMaterials.get().stream().map(CompMaterial::parseItem).collect(Collectors.toList());
+        List<ItemStack> validMaterials = InventorySafeMaterials.get().stream().map(CompMaterial::parseItem).toList();
 
         // load in enchantments
         for (XEnchantment value : XEnchantment.values()) {
@@ -92,10 +92,10 @@ public class MaterialPickerGUI extends BaseGUI {
         }
 
         if (this.searchQuery != null) {
-            validMaterials = validMaterials.stream().filter(mat -> Filterer.searchByItemInfo(this.searchQuery, mat)).collect(Collectors.toList());
+            validMaterials = validMaterials.stream().filter(mat -> Filterer.searchByItemInfo(this.searchQuery, mat)).toList();
         }
 
-        final List<ItemStack> itemsToFill = validMaterials.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).collect(Collectors.toList());
+        final List<ItemStack> itemsToFill = validMaterials.stream().skip((page - 1) * (long) this.fillSlots().size()).limit(this.fillSlots().size()).toList();
         pages = (int) Math.max(1, Math.ceil(validMaterials.size() / (double) this.fillSlots().size()));
 
         setPrevPage(5, 3, this.getPreviousButton());

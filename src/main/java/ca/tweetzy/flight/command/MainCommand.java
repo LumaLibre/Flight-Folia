@@ -63,7 +63,7 @@ public final class MainCommand extends Command {
 
         sender.sendMessage("");
         if (nestedCommands != null) {
-            List<String> commands = nestedCommands.children.values().stream().distinct().map(c -> c.getSubCommands().get(0)).collect(Collectors.toList());
+            List<String> commands = nestedCommands.children.values().stream().distinct().map(c -> c.getSubCommands().get(0)).toList();
 
             if (sortHelp) {
                 Collections.sort(commands);

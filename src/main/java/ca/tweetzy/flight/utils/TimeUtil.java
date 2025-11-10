@@ -43,10 +43,15 @@ public final class TimeUtil {
         final Map<TimeUnit, Long> times = new HashMap<>();
         final long seconds = (milliseconds - System.currentTimeMillis()) / 1000;
 
-        times.put(TimeUnit.DAYS, TimeUnit.SECONDS.toDays(seconds));
-        times.put(TimeUnit.HOURS, TimeUnit.SECONDS.toHours(seconds) - (TimeUnit.SECONDS.toDays(seconds) * 24L));
-        times.put(TimeUnit.MINUTES, TimeUnit.SECONDS.toMinutes(seconds) - (TimeUnit.SECONDS.toHours(seconds) * 60));
-        times.put(TimeUnit.SECONDS, TimeUnit.SECONDS.toSeconds(seconds) - (TimeUnit.SECONDS.toMinutes(seconds) * 60));
+        final long days = TimeUnit.SECONDS.toDays(seconds);
+        final long hours = TimeUnit.SECONDS.toHours(seconds) - (days * 24L);
+        final long minutes = TimeUnit.SECONDS.toMinutes(seconds) - (TimeUnit.SECONDS.toHours(seconds) * 60L);
+        final long secs = seconds - (TimeUnit.SECONDS.toMinutes(seconds) * 60L);
+
+        times.put(TimeUnit.DAYS, days);
+        times.put(TimeUnit.HOURS, hours);
+        times.put(TimeUnit.MINUTES, minutes);
+        times.put(TimeUnit.SECONDS, secs);
 
         return times;
     }

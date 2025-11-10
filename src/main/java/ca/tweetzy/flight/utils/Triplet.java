@@ -18,20 +18,11 @@
 
 package ca.tweetzy.flight.utils;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-
 /**
  * Date Created: April 10 2022
  * Time Created: 12:38 p.m.
  *
  * @author Kiran Hart
  */
-@AllArgsConstructor
-@Getter
-public final class Triplet<L, M, R> {
-
-    private final L left;
-    private final M middle;
-    private final R right;
+public record Triplet<L, M, R>(L left, M middle, R right) {
 }

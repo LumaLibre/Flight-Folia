@@ -30,4 +30,8 @@ class GuiHolder implements InventoryHolder {
     public Inventory newInventory(InventoryType type, String title) {
         return Bukkit.createInventory(this, type, title);
     }
+
+    public Gui getGUI() {
+        return gui;
+    }
 }

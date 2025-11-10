@@ -185,7 +185,7 @@ public final class QuickItem {
      * Append the given lore to the end of existing item lore.
      */
     public QuickItem lore(String... lore) {
-        return this.lore(Arrays.asList(lore));
+        return this.lore(List.of(lore));
     }
 
     /**
@@ -197,7 +197,7 @@ public final class QuickItem {
     }
 
     public QuickItem lore(Player player, String... lore) {
-        List<String> newLore =Arrays.asList(lore);
+        List<String> newLore = List.of(lore);
         if (player != null) {
             newLore = PlaceholderAPIHook.tryReplace(player, newLore);
         }
@@ -236,7 +236,7 @@ public final class QuickItem {
      * Add the given flags to the item.
      */
     public QuickItem flags(ItemFlag... flags) {
-        this.flags.addAll(Arrays.asList(flags));
+        this.flags.addAll(List.of(flags));
         return this;
     }
 
@@ -299,7 +299,12 @@ public final class QuickItem {
      */
     public ItemStack make() {
         ItemStack compiledItem = this.item != null ? this.item.clone() : this.material.parseItem();
-        ItemMeta compiledMeta = compiledItem != null && compiledItem.hasItemMeta() ? compiledItem.getItemMeta() : Bukkit.getItemFactory().getItemMeta(compiledItem.getType());
+        ItemMeta compiledMeta;
+        if (compiledItem != null && compiledItem.hasItemMeta()) {
+            compiledMeta = compiledItem.getItemMeta();
+        } else {
+            compiledMeta = Bukkit.getItemFactory().getItemMeta(compiledItem.getType());
+        }
 
         // Override with given material
         if (this.material != null) {
@@ -323,28 +328,32 @@ public final class QuickItem {
             final Enchantment enchant = entry.getKey();
             final int level = entry.getValue();
 
-            if (compiledMeta instanceof EnchantmentStorageMeta)
-                ((EnchantmentStorageMeta) compiledMeta).addStoredEnchant(enchant, level, true);
-
-            else
+            if (compiledMeta instanceof EnchantmentStorageMeta storageMeta) {
+                storageMeta.addStoredEnchant(enchant, level, true);
+            } else {
                 compiledMeta.addEnchant(enchant, level, true);
+            }
         }
 
-        if (this.name != null && !"".equals(this.name))
+        if (this.name != null && !this.name.isEmpty()) {
             compiledMeta.setDisplayName(Common.colorize(name));
+        }
 
-        List<String> lore = new ArrayList<>();
-
-        if (meta != null && meta.getLore() != null)
-            lore = meta.getLore();
+        List<String> lore = (meta != null && meta.getLore() != null) 
+            ? new ArrayList<>(meta.getLore()) 
+            : new ArrayList<>();
 
         if (!this.lores.isEmpty()) {
-            final List<String> coloredLores = new ArrayList<>();
+            int estimatedSize = lore.size() + this.lores.size() * 2;
+            final List<String> coloredLores = new ArrayList<>(estimatedSize);
 
             for (final String line : this.lores) {
-                if (line != null) {
-                    for (final String subLore : line.split("\n"))
-                        coloredLores.add(Common.colorize("&7" + subLore));
+                if (line != null && !line.isEmpty()) {
+                    for (final String subLore : line.split("\n")) {
+                        if (!subLore.isEmpty()) {
+                            coloredLores.add(Common.colorize("&7" + subLore));
+                        }
+                    }
                 }
             }
 

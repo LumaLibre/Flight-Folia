@@ -2338,7 +2338,7 @@ public final class CompSound extends XModule<CompSound, Sound> {
          */
         public SoundPlayer forPlayers(@Nullable Collection<Player> players) {
             this.players.clear();
-            this.players.addAll(players.stream().map(Entity::getUniqueId).collect(Collectors.toList()));
+            this.players.addAll(players.stream().map(Entity::getUniqueId).toList());
             return this;
         }
 

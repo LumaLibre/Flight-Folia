@@ -37,11 +37,13 @@ public final class ItemUtil {
      * @return The name of the item.
      */
     public String getItemName(@NonNull final ItemStack itemStack) {
-        if (itemStack.hasItemMeta() && itemStack.getItemMeta().hasDisplayName()) {
-            return itemStack.getItemMeta().getDisplayName();
-        } else {
-            return ChatUtil.capitalizeFully(itemStack.getType());
+        if (itemStack.hasItemMeta()) {
+            org.bukkit.inventory.meta.ItemMeta meta = itemStack.getItemMeta();
+            if (meta != null && meta.hasDisplayName()) {
+                return meta.getDisplayName();
+            }
         }
+        return ChatUtil.capitalizeFully(itemStack.getType());
     }
 
     /**
@@ -52,13 +54,17 @@ public final class ItemUtil {
      * @return The item lore
      */
     public List<String> getItemLore(@NonNull final ItemStack stack) {
-        final List<String> lore = new ArrayList<>();
-        if (stack.hasItemMeta()) {
-            if (stack.getItemMeta().hasLore() && stack.getItemMeta().getLore() != null) {
-                lore.addAll(stack.getItemMeta().getLore());
+        if (!stack.hasItemMeta()) {
+            return new ArrayList<>();
+        }
+        org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
+        if (meta != null && meta.hasLore()) {
+            List<String> existingLore = meta.getLore();
+            if (existingLore != null) {
+                return new ArrayList<>(existingLore);
             }
         }
-        return lore;
+        return new ArrayList<>();
     }
 
     /**
@@ -69,12 +75,18 @@ public final class ItemUtil {
      * @return A list of enchants as strings
      */
     public List<String> getItemEnchantments(@NonNull final ItemStack stack) {
-        final List<String> enchantments = new ArrayList<>();
-        if (stack.getItemMeta() != null && stack.getItemMeta().hasEnchants()) {
-            stack.getItemMeta().getEnchants().forEach((k, i) -> {
-                enchantments.add(ChatUtil.capitalizeFully(XEnchantment.matchXEnchantment(k).name()));
-            });
+        org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
+        if (meta == null || !meta.hasEnchants()) {
+            return new ArrayList<>();
         }
+        java.util.Map<org.bukkit.enchantments.Enchantment, Integer> enchants = meta.getEnchants();
+        if (enchants.isEmpty()) {
+            return new ArrayList<>();
+        }
+        final List<String> enchantments = new ArrayList<>(enchants.size());
+        enchants.forEach((k, i) ->
+            enchantments.add(ChatUtil.capitalizeFully(XEnchantment.matchXEnchantment(k).name()))
+        );
         return enchantments;
     }
 }

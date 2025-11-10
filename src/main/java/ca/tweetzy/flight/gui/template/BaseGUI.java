@@ -61,7 +61,7 @@ public abstract class BaseGUI extends Gui {
      * Returns all slots to fill with content
      */
     protected List<Integer> fillSlots() {
-        return IntStream.rangeClosed(0, 44).boxed().collect(Collectors.toList());
+        return IntStream.rangeClosed(0, 44).boxed().toList();
     }
 
     // Abstract button definitions

@@ -141,9 +141,9 @@ public class Gui {
     public List<Player> getPlayers() {
         return inventory == null ? Collections.emptyList()
                 : inventory.getViewers().stream()
-                .filter(e -> e instanceof Player)
-                .map(e -> (Player) e)
-                .collect(Collectors.toList());
+                .filter(Player.class::isInstance)
+                .map(Player.class::cast)
+                .toList();
     }
 
     public boolean isOpen() {

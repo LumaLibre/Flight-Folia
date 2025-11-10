@@ -139,9 +139,11 @@ public final class PlayerUtil {
     public boolean isInventoryEmpty(@NonNull final Player player) {
         final ItemStack[] everything = (ItemStack[]) ArrayUtils.addAll(player.getInventory().getContents(), player.getInventory().getArmorContents());
 
-        for (final ItemStack i : everything)
-            if (i != null && i.getType() != Material.AIR)
+        for (final ItemStack i : everything) {
+            if (i != null && i.getType() != Material.AIR) {
                 return false;
+            }
+        }
 
         return true;
     }

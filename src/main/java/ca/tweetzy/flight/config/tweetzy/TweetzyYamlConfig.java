@@ -235,14 +235,14 @@ public class TweetzyYamlConfig extends YamlConfiguration {
                 continue;
             }
 
-            String oldEntryKey = upgradeStep.getFirst();
+            String oldEntryKey = upgradeStep.first();
             if (oldEntryKey == null) {
                 oldEntryKey = entry.getKey();
             }
 
             Object newValue = get(oldEntryKey);
-            if (upgradeStep.getSecond() != null) {
-                newValue = upgradeStep.getSecond().apply(newValue);
+            if (upgradeStep.second() != null) {
+                newValue = upgradeStep.second().apply(newValue);
             }
 
             set(oldEntryKey, null);

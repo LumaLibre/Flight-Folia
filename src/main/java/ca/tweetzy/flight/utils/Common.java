@@ -25,9 +25,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import org.bukkit.entity.Player;
 
 /**
  * Date Created: April 07 2022
@@ -40,6 +43,9 @@ public final class Common {
 
     public String PREFIX = "[FlightCore]";
     public String PLUGIN_NAME = "FlightCore";
+    
+    // Cache compiled patterns for better performance
+    private static final Map<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
 
     public void setPrefix(String prefix) {
         PREFIX = prefix;
@@ -66,19 +72,20 @@ public final class Common {
     }
 
     public void tell(CommandSender sender, boolean addPrefix, String... messages) {
-        final String prefix = (PREFIX.length() == 0 || !addPrefix) ? "" : PREFIX + " ";
+        final String prefix = (PREFIX.isEmpty() || !addPrefix) ? "" : PREFIX + " ";
 
         for (String message : messages) {
-            message = colorize(prefix + message);
-            message = message.replace("%pl_name%", PLUGIN_NAME);
-            message = message.replace("%pl_prefix%", PREFIX);
+            if (message == null) continue;
+            
+            String processed = colorize(prefix + message);
+            processed = processed.replace("%pl_name%", PLUGIN_NAME);
+            processed = processed.replace("%pl_prefix%", PREFIX);
 
-            if (message.startsWith("<center>")) {
-                message = message.replace("<center>", "");
-                message = ChatUtil.centerMessage(message);
+            if (processed.startsWith("<center>")) {
+                processed = ChatUtil.centerMessage(processed.substring(8));
             }
 
-            sender.sendMessage(message);
+            sender.sendMessage(processed);
         }
     }
 
@@ -91,10 +98,14 @@ public final class Common {
     }
 
     public void broadcast(String permission, boolean prefix, String... messages) {
-        if (permission == null)
-            Bukkit.getOnlinePlayers().forEach(online -> tell(online, prefix, messages));
-        else
-            Bukkit.getOnlinePlayers().stream().filter(online -> online.hasPermission(permission)).forEach(filtered -> tell(filtered, prefix, messages));
+        Collection<? extends Player> players = Bukkit.getOnlinePlayers();
+        if (permission == null) {
+            players.forEach(online -> tell(online, prefix, messages));
+        } else {
+            players.stream()
+                .filter(online -> online.hasPermission(permission))
+                .forEach(filtered -> tell(filtered, prefix, messages));
+        }
     }
 
     public void broadcast(String... messages) {
@@ -112,7 +123,7 @@ public final class Common {
     }
 
     public List<String> colorize(List<String> strings) {
-        return strings.stream().map(Common::colorize).collect(Collectors.toList());
+        return strings.stream().map(Common::colorize).toList();
     }
 
     /**
@@ -124,8 +135,12 @@ public final class Common {
      * @return A boolean value.
      */
     public boolean match(String pattern, String sentence) {
-        Pattern patt = Pattern.compile(ChatColor.stripColor(pattern), Pattern.CASE_INSENSITIVE);
-        java.util.regex.Matcher matcher = patt.matcher(sentence);
-        return matcher.find();
+        if (pattern == null || sentence == null) {
+            return false;
+        }
+        String strippedPattern = ChatColor.stripColor(pattern);
+        Pattern patt = PATTERN_CACHE.computeIfAbsent(strippedPattern, 
+            p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE));
+        return patt.matcher(sentence).find();
     }
 }

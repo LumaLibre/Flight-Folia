@@ -46,7 +46,7 @@ public final class ColorFormatter {
 
     private static final boolean SUPPORTS_RGB = VERSION >= 16;
 
-    private static final List<String> SPECIAL_COLORS = Arrays.asList("&l", "&n", "&o", "&k", "&m", "§l", "§n", "§o", "§k", "§m");
+    private static final List<String> SPECIAL_COLORS = List.of("&l", "&n", "&o", "&k", "&m", "§l", "§n", "§o", "§k", "§m");
 
     /**
      * Cached result of all legacy colors.
@@ -77,7 +77,7 @@ public final class ColorFormatter {
      *
      * @since 1.0.2
      */
-    private static final List<ColorPattern> ColorPatternS = Arrays.asList(new SolidColorPattern(), new GradientColorPattern(), new RainbowColorPattern());
+    private static final List<ColorPattern> ColorPatternS = List.of(new SolidColorPattern(), new GradientColorPattern(), new RainbowColorPattern());
 
     /**
      * Processes a string to add color to it.
@@ -110,7 +110,7 @@ public final class ColorFormatter {
     public static List<String> process(@Nonnull List<String> strings) {
         return strings.stream()
                 .map(ColorFormatter::process)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -190,23 +190,27 @@ public final class ColorFormatter {
     @Nonnull
     private static String apply(@Nonnull String source, ChatColor[] colors) {
         StringBuilder specialColors = new StringBuilder();
-        StringBuilder stringBuilder = new StringBuilder();
-        String[] characters = source.split("");
+        StringBuilder stringBuilder = new StringBuilder(source.length() * 2); // Pre-size for color codes
         int outIndex = 0;
-        for (int i = 0; i < characters.length; i++) {
-            if (characters[i].equals("&") || characters[i].equals("§")) {
-                if (i + 1 < characters.length) {
-                    if (characters[i + 1].equals("r")) {
+        char[] chars = source.toCharArray();
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+            if (c == '&' || c == '§') {
+                if (i + 1 < chars.length) {
+                    char next = chars[i + 1];
+                    if (next == 'r') {
                         specialColors.setLength(0);
                     } else {
-                        specialColors.append(characters[i]);
-                        specialColors.append(characters[i + 1]);
+                        specialColors.append(c);
+                        specialColors.append(next);
                     }
                     i++;
-                } else
-                    stringBuilder.append(colors[outIndex++]).append(specialColors).append(characters[i]);
-            } else
-                stringBuilder.append(colors[outIndex++]).append(specialColors).append(characters[i]);
+                } else {
+                    stringBuilder.append(colors[outIndex++]).append(specialColors).append(c);
+                }
+            } else {
+                stringBuilder.append(colors[outIndex++]).append(specialColors).append(c);
+            }
         }
         return stringBuilder.toString();
     }
