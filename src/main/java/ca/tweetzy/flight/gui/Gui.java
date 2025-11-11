@@ -34,8 +34,10 @@ import ca.tweetzy.flight.gui.methods.Openable;
 import ca.tweetzy.flight.gui.methods.Pagable;
 import ca.tweetzy.flight.utils.Common;
 import ca.tweetzy.flight.utils.QuickItem;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
@@ -49,7 +51,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class Gui {
@@ -144,6 +145,93 @@ public class Gui {
                 .filter(Player.class::isInstance)
                 .map(Player.class::cast)
                 .toList();
+    }
+
+    @NotNull
+    public Gui setAction(int cell, @Nullable Clickable action) {
+        setConditional(cell, null, action);
+        return this;
+    }
+
+    @NotNull
+    public Gui setAction(int row, int col, @Nullable Clickable action) {
+        setConditional(col + row * inventoryType.columns, null, action);
+        return this;
+    }
+
+    @NotNull
+    public Gui setAction(int cell, @Nullable ClickType type, @Nullable Clickable action) {
+        setConditional(cell, type, action);
+        return this;
+    }
+
+    @NotNull
+    public Gui setAction(int row, int col, @Nullable ClickType type, @Nullable Clickable action) {
+        setConditional(col + row * inventoryType.columns, type, action);
+        return this;
+    }
+
+    @NotNull
+    public Gui setActionForRange(int cellFirst, int cellLast, @Nullable Clickable action) {
+        for (int cell = cellFirst; cell <= cellLast; ++cell) {
+            setConditional(cell, null, action);
+        }
+        return this;
+    }
+
+    @NotNull
+    public Gui setActionForRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast, @Nullable Clickable action) {
+        final int last = cellColLast + cellRowLast * inventoryType.columns;
+        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
+            setConditional(cell, null, action);
+        }
+        return this;
+    }
+
+    @NotNull
+    public Gui setActionForRange(int cellFirst, int cellLast, @Nullable ClickType type, @Nullable Clickable action) {
+        for (int cell = cellFirst; cell <= cellLast; ++cell) {
+            setConditional(cell, type, action);
+        }
+        return this;
+    }
+
+    @NotNull
+    public Gui setActionForRange(int cellRowFirst, int cellColFirst, int cellRowLast, int cellColLast, @Nullable ClickType type, @Nullable Clickable action) {
+        final int last = cellColLast + cellRowLast * inventoryType.columns;
+        for (int cell = cellColFirst + cellRowFirst * inventoryType.columns; cell <= last; ++cell) {
+            setConditional(cell, type, action);
+        }
+        return this;
+    }
+
+    @NotNull
+    public Gui clearActions(int cell) {
+        conditionalButtons.remove(cell);
+        return this;
+    }
+
+    @NotNull
+    public Gui clearActions(int row, int col) {
+        return clearActions(col + row * inventoryType.columns);
+    }
+
+    @NotNull
+    public Gui setOnOpen(@Nullable Openable action) {
+        opener = action;
+        return this;
+    }
+
+    @NotNull
+    public Gui setOnClose(@Nullable Closable action) {
+        closer = action;
+        return this;
+    }
+
+    @NotNull
+    public Gui setOnDrop(@Nullable Droppable action) {
+        dropper = action;
+        return this;
     }
 
     public boolean isOpen() {
@@ -513,7 +601,15 @@ public class Gui {
     // Event handling
     // --------------------------------------
 
-    protected boolean onClick(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
+    protected boolean onClick(@NotNull GuiManager manager, @NotNull Player player,
+                              @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
+
+        // --- SESSION VALIDATION ---
+        if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
+            event.setCancelled(true);
+            return false;
+        }
+
         int cell = event.getSlot();
         Map<ClickType, Clickable> conditionals = conditionalButtons.get(cell);
 
@@ -525,40 +621,94 @@ public class Gui {
 
             // Global click delay
             if (globalClickDelay != -1 && globalLastClicked != -1 && now - globalLastClicked < globalClickDelay) {
-                if (delayClicker != null) delayClicker.onClick(globalLastClicked, globalClickDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                if (delayClicker != null)
+                    delayClicker.onClick(globalLastClicked, globalClickDelay,
+                            new GuiClickEvent(manager, this, player, event, cell, true));
                 return false;
             }
             globalLastClicked = now;
 
-            // Slot click delay
+            // Slot-specific delay
             long slotDelay = slotClickDelays.getOrDefault(cell, -1L);
             long lastSlotClick = slotLastClicked.getOrDefault(cell, -1L);
             if (slotDelay != -1 && lastSlotClick != -1 && now - lastSlotClick < slotDelay) {
-                if (delayClicker != null) delayClicker.onClick(lastSlotClick, slotDelay, new GuiClickEvent(manager, this, player, event, cell, true));
+                if (delayClicker != null)
+                    delayClicker.onClick(lastSlotClick, slotDelay,
+                            new GuiClickEvent(manager, this, player, event, cell, true));
                 return false;
             }
             slotLastClicked.put(cell, now);
 
+            // --- DOUBLE-CLICK EXPLOIT PREVENTION ---
+            if (event.getClick() == ClickType.DOUBLE_CLICK) {
+                ItemStack cursor = event.getCursor();
+                if (cursor != null && cursor.getType() != Material.AIR) {
+                    for (int i = 0; i < inventory.getSize(); i++) {
+                        if (!unlockedCells.getOrDefault(i, false) &&
+                                cursor.isSimilar(inventory.getItem(i))) {
+                            event.setCancelled(true);
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            // --- SHIFT-CLICK PROTECTION ---
+            if ((event.getClick() == ClickType.SHIFT_LEFT || event.getClick() == ClickType.SHIFT_RIGHT)
+                    && !allowShiftClick) {
+                event.setCancelled(true);
+                return false;
+            }
+
             button.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
             return true;
         } else {
-            if (defaultClicker != null) defaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
-            else if (privateDefaultClicker != null) privateDefaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+            if (defaultClicker != null)
+                defaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
+            else if (privateDefaultClicker != null)
+                privateDefaultClicker.onClick(new GuiClickEvent(manager, this, player, event, cell, true));
             return button != null;
         }
     }
 
-    protected boolean onClickPlayerInventory(@NotNull GuiManager manager, @NotNull Player player, @NotNull Inventory openInv, @NotNull InventoryClickEvent event) {
+    protected boolean onClickPlayerInventory(@NotNull GuiManager manager, @NotNull Player player,
+                                             @NotNull Inventory openInv, @NotNull InventoryClickEvent event) {
+
+        if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
+            event.setCancelled(true);
+            return false;
+        }
+
         if (playerInvClicker == null) return false;
         playerInvClicker.onClick(new GuiClickEvent(manager, this, player, event, event.getSlot(), true));
+
+        if (!acceptsItems || event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+            event.setCancelled(true);
+            return false;
+        }
+
         return true;
     }
 
-    protected boolean onClickOutside(@NotNull GuiManager manager, @NotNull Player player, @NotNull InventoryClickEvent event) {
+    protected boolean onClickOutside(@NotNull GuiManager manager, @NotNull Player player,
+                                     @NotNull InventoryClickEvent event) {
+
+        if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
+            event.setCancelled(true);
+            return false;
+        }
+
+        if (!allowDropItems) {
+            event.setCancelled(true);
+            return false;
+        }
+
         return dropper == null || dropper.onDrop(new GuiDropItemEvent(manager, this, player, event));
     }
 
     protected void onOpen(@NotNull GuiManager manager, @NotNull Player player) {
+        // --- REGISTER SESSION ---
+        GUISessionLock.start(player.getUniqueId(), this);
         open = true;
         guiManager = manager;
         if (opener != null) opener.onOpen(new GuiOpenEvent(manager, this, player));
@@ -569,6 +719,8 @@ public class Gui {
             manager.showGUI(player, this);
             return;
         }
+
+        GUISessionLock.end(player.getUniqueId());
         boolean showParent = open && parent != null;
         if (closer != null) closer.onClose(new GuiCloseEvent(manager, this, player));
         if (showParent) manager.showGUI(player, parent);
