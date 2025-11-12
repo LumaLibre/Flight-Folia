@@ -29,6 +29,9 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class GuiManager {
 
+    /** Debug flag: set to true to log detailed reflection errors. */
+    private static final boolean DEBUG = false;
+
     private final Plugin plugin;
     private final GuiListener listener = new GuiListener(this);
     private final ConcurrentMap<Player, Gui> openInventories = new ConcurrentHashMap<>();
@@ -69,12 +72,14 @@ public class GuiManager {
             Gui previous = openInventories.put(player, gui);
             if (previous != null) previous.open = false;
 
-            // Start a session lock for this player
-            GUISessionLock.start(player.getUniqueId(), gui);
-
             Inventory inv = gui.getOrCreateInventory(this);
 
+            // Move session lock to main thread to prevent race condition
+            // Session lock must be set BEFORE inventory opens to prevent exploit
             Bukkit.getScheduler().runTask(plugin, () -> {
+                // Start session lock on main thread before opening inventory
+                GUISessionLock.start(player.getUniqueId(), gui);
+                
                 player.openInventory(inv);
                 gui.onOpen(this, player);
             });
@@ -105,18 +110,30 @@ public class GuiManager {
             getTopInventory.setAccessible(true);
             return (Inventory) getTopInventory.invoke(view);
         } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-            throw new RuntimeException("Failed to resolve top inventory via reflection", e);
+            // Log error but don't crash server - return null to gracefully handle
+            Bukkit.getLogger().warning("[GuiManager] Failed to resolve top inventory via reflection: " + e.getMessage());
+            if (DEBUG) {
+                e.printStackTrace();
+            }
+            return null;
         }
     }
 
     public static Inventory getTopInventory(InventoryEvent event) {
+        if (event == null) return null;
         try {
             Object view = event.getView();
+            if (view == null) return null;
             Method getTopInventory = view.getClass().getMethod("getTopInventory");
             getTopInventory.setAccessible(true);
             return (Inventory) getTopInventory.invoke(view);
         } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-            throw new RuntimeException(e);
+            // Log error but don't crash server - return null to gracefully handle
+            Bukkit.getLogger().warning("[GuiManager] Failed to resolve top inventory via reflection: " + e.getMessage());
+            if (DEBUG) {
+                e.printStackTrace();
+            }
+            return null;
         }
     }
 

@@ -24,5 +24,26 @@ package ca.tweetzy.flight.utils;
  *
  * @author Kiran Hart
  */
-public record Triplet<L, M, R>(L left, M middle, R right) {
+public class Triplet<L, M, R> {
+    private final L first;
+    private final M second;
+    private final R third;
+
+    public Triplet(L first, M second, R third) {
+        this.first = first;
+        this.second = second;
+        this.third = third;
+    }
+
+    public L getFirst() {
+        return first;
+    }
+
+    public M getSecond() {
+        return second;
+    }
+
+    public R getThird() {
+        return third;
+    }
 }

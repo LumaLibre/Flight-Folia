@@ -104,6 +104,7 @@ public class Gui {
     protected final Map<Integer, Long> slotClickDelays = new HashMap<>();
     protected long globalClickDelay = -1;
     protected long globalLastClicked = -1;
+    protected boolean globalClickInitialized = false;
 
     protected boolean open = false;
     protected GuiManager guiManager;
@@ -145,6 +146,25 @@ public class Gui {
                 .filter(Player.class::isInstance)
                 .map(Player.class::cast)
                 .toList();
+    }
+
+    @NotNull
+    public Gui setGlobalClickDelay(long delay) {
+        this.globalClickDelay = delay;
+        return this;
+    }
+
+    @NotNull
+    public Gui setSlotClickDelay(int slot, long delay) {
+        this.slotClickDelays.put(slot, delay);
+        return this;
+    }
+
+    @NotNull
+    public Gui setSlotClickDelay(int row, int col, long delay) {
+        final int cell = col + row * inventoryType.columns;
+        this.slotClickDelays.put(cell, delay);
+        return this;
     }
 
     @NotNull
@@ -619,14 +639,17 @@ public class Gui {
         if (button != null) {
             long now = System.currentTimeMillis();
 
-            // Global click delay
-            if (globalClickDelay != -1 && globalLastClicked != -1 && now - globalLastClicked < globalClickDelay) {
-                if (delayClicker != null)
-                    delayClicker.onClick(globalLastClicked, globalClickDelay,
-                            new GuiClickEvent(manager, this, player, event, cell, true));
-                return false;
+            // Global click delay - properly initialized to prevent first-click bypass
+            if (globalClickDelay != -1) {
+                if (globalClickInitialized && now - globalLastClicked < globalClickDelay) {
+                    if (delayClicker != null)
+                        delayClicker.onClick(globalLastClicked, globalClickDelay,
+                                new GuiClickEvent(manager, this, player, event, cell, true));
+                    return false;
+                }
+                globalLastClicked = now;
+                globalClickInitialized = true;
             }
-            globalLastClicked = now;
 
             // Slot-specific delay
             long slotDelay = slotClickDelays.getOrDefault(cell, -1L);
@@ -723,7 +746,14 @@ public class Gui {
         GUISessionLock.end(player.getUniqueId());
         boolean showParent = open && parent != null;
         if (closer != null) closer.onClose(new GuiCloseEvent(manager, this, player));
-        if (showParent) manager.showGUI(player, parent);
+        
+        // Validate parent GUI before reopening to prevent exploitation
+        if (showParent && parent != null) {
+            // Ensure parent is a valid GUI instance and not the same as current
+            if (parent != this) {
+                manager.showGUI(player, parent);
+            }
+        }
     }
 
     public void update() {

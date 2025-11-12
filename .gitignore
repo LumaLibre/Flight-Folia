@@ -2,3 +2,6 @@
 /target/
 /src/test/
 /.vscode/settings.json
+.idea
+
+*.iml

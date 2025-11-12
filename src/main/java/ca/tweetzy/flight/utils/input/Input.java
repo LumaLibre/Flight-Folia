@@ -18,6 +18,8 @@
 
 package ca.tweetzy.flight.utils.input;
 
+import ca.tweetzy.flight.gui.GUISessionLock;
+import ca.tweetzy.flight.gui.Gui;
 import com.cryptomorin.xseries.messages.ActionBar;
 import com.cryptomorin.xseries.messages.Titles;
 import lombok.NonNull;
@@ -28,9 +30,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -42,14 +47,30 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public abstract class Input implements Listener, Runnable {
 
+    // Cache the reflection Method object for performance (lookup once, reuse many times)
+    private static java.lang.reflect.Method getGUIMethod = null;
+    private static final Object methodLock = new Object();
+
     private final Player player;
+    private final JavaPlugin plugin;
     private String title;
     private String subtitle;
 
     private final BukkitTask task;
+    private boolean closed = false;
+    private boolean exiting = false;
+    private Gui savedGui = null;
 
     public Input(@NonNull final JavaPlugin plugin, @NonNull final Player player) {
+        this.plugin = plugin;
         this.player = player;
+        
+        // Save reference to open GUI and ensure it allows closing
+        this.savedGui = GUISessionLock.get(player.getUniqueId());
+        if (this.savedGui != null) {
+            this.savedGui.setAllowClose(true);
+        }
+        
         Bukkit.getServer().getScheduler().runTaskLater(plugin, player::closeInventory, 1L);
         this.task = Bukkit.getServer().getScheduler().runTaskTimer(plugin, this, 1L, 1L);
         Bukkit.getServer().getPluginManager().registerEvents(this, plugin);
@@ -102,10 +123,84 @@ public abstract class Input implements Listener, Runnable {
         }
     }
 
-    @EventHandler
-    public void close(InventoryOpenEvent e) {
-        if (e.getPlayer().equals(this.player)) {
-            this.close(false);
+    private boolean isGuiInventory(Inventory inventory) {
+        InventoryHolder holder = inventory.getHolder();
+        if (holder == null) return false;
+        // Check if holder is a GuiHolder by checking class name (GuiHolder is package-private)
+        return holder.getClass().getName().equals("ca.tweetzy.flight.gui.GuiHolder");
+    }
+
+    /**
+     * Gets the GUI from a GuiHolder using cached reflection for performance.
+     * Returns null if the holder is not a GuiHolder or if reflection fails.
+     */
+    private Gui getGuiFromHolder(InventoryHolder holder) {
+        if (holder == null) return null;
+        
+        // Initialize the cached method if needed (thread-safe)
+        if (getGUIMethod == null) {
+            synchronized (methodLock) {
+                if (getGUIMethod == null) {
+                    try {
+                        getGUIMethod = holder.getClass().getMethod("getGUI");
+                        getGUIMethod.setAccessible(true);
+                    } catch (NoSuchMethodException e) {
+                        return null;
+                    }
+                }
+            }
+        }
+        
+        // Use the cached method to invoke (much faster than getMethod() each time)
+        try {
+            return (Gui) getGUIMethod.invoke(holder);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onInventoryClose(InventoryCloseEvent e) {
+        if (e.getPlayer().equals(this.player) && !this.closed) {
+            // Prevent GUI from reopening by ensuring allowClose stays true
+            if (isGuiInventory(e.getInventory())) {
+                Gui gui = getGuiFromHolder(e.getInventory().getHolder());
+                if (gui != null) {
+                    gui.setAllowClose(true);
+                } else if (this.savedGui != null) {
+                    // Fallback to saved GUI if reflection fails
+                    this.savedGui.setAllowClose(true);
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryOpen(InventoryOpenEvent e) {
+        if (e.getPlayer().equals(this.player) && !this.closed && !this.exiting) {
+            // Prevent GUI from reopening while input is active
+            if (isGuiInventory(e.getInventory())) {
+                // Set allowClose on the GUI so it won't try to reopen itself
+                Gui gui = getGuiFromHolder(e.getInventory().getHolder());
+                if (gui != null) {
+                    gui.setAllowClose(true);
+                } else if (this.savedGui != null) {
+                    // Fallback to saved GUI if reflection fails
+                    this.savedGui.setAllowClose(true);
+                }
+                
+                // Close the GUI immediately after it opens (InventoryOpenEvent is not cancellable)
+                Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (this.player.isOnline() && 
+                        this.player.getOpenInventory().getTopInventory().equals(e.getInventory())) {
+                        this.player.closeInventory();
+                    }
+                });
+            } else {
+                // Only close input if the opened inventory is NOT a GUI inventory
+                // (i.e., player opened a chest or other inventory manually)
+                this.close(false);
+            }
         }
     }
 
@@ -118,10 +213,23 @@ public abstract class Input implements Listener, Runnable {
     }
 
     public void close(boolean completed) {
+        if (this.closed) return; // Prevent double-closing
+        this.closed = true;
+        
         HandlerList.unregisterAll(this);
         this.task.cancel();
         if (!completed) {
-            this.onExit(this.player);
+            // Mark that we're exiting to prevent InventoryOpenEvent from interfering
+            this.exiting = true;
+            // Delay onExit slightly to ensure input is fully closed and handlers unregistered before GUI reopens
+            Bukkit.getScheduler().runTaskLater(
+                this.plugin,
+                () -> {
+                    this.onExit(this.player);
+                    this.exiting = false;
+                },
+                3L
+            );
         }
 
         Titles.clearTitle(this.player);

@@ -22,7 +22,7 @@ public abstract class BaseGUI extends Gui {
         this(null, title, rows);
     }
 
-    public BaseGUI(@NonNull Gui parent, @NonNull String title, int rows) {
+    public BaseGUI(Gui parent, @NonNull String title, int rows) {
         super(rows, parent);
         this.parent = parent;
         setTitle(Common.colorize(title));
