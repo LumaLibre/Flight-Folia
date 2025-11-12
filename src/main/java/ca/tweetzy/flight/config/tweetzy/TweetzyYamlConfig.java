@@ -61,7 +61,7 @@ public class TweetzyYamlConfig extends YamlConfiguration {
     private int targetVersion;
     private ConfigEntry versionEntry;
 
-    protected final Map<String, ConfigEntry> configEntries = new LinkedHashMap<>(0);
+    protected final Map<String, ConfigEntry> configEntries = new LinkedHashMap<>(16);
 
     public TweetzyYamlConfig(@NotNull JavaPlugin plugin, @NotNull File file) {
         this(file, plugin.getLogger());

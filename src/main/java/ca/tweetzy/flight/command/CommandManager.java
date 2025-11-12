@@ -116,6 +116,9 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 
     public NestedCommand registerCommandDynamically(Command command) {
         final NestedCommand nested = new NestedCommand(command);
+        
+        // Set plugin for async support
+        command.setPlugin(plugin);
 
         command.getSubCommands().forEach(cmd -> {
             CommandManager.registerCommandDynamically(plugin, cmd, this, this);
@@ -135,6 +138,9 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 
     public NestedCommand addCommand(Command command) {
         final NestedCommand nested = new NestedCommand(command);
+        
+        // Set plugin for async support
+        command.setPlugin(plugin);
 
         command.getSubCommands().forEach(cmd -> {
             commands.put(cmd.toLowerCase(), nested);
@@ -205,9 +211,13 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull org.bukkit.command.Command command, @NotNull String s, @NotNull String[] args) {
         // grab the specific command that's being called
-        final NestedCommand nested = commands.get(command.getName().toLowerCase());
+        final String commandName = command.getName().toLowerCase();
+        final NestedCommand nested = commands.get(commandName);
 
         if (nested != null) {
+            // Create command context
+            final CommandContext context = new CommandContext(commandSender, args, commandName);
+            
             // check to see if we're trying to call a sub-command
             if (args.length != 0 && !nested.children.isEmpty()) {
                 final String subCommand = getSubCommand(nested, args);
@@ -215,20 +225,23 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
                 if (subCommand != null) {
                     // we have a subcommand to use!
                     final Command sub = nested.children.get(subCommand);
-                    // adjust the arguments to match - BREAKING!!
+                    // adjust the arguments to match
                     int i = subCommand.indexOf(' ') == -1 ? 1 : 2;
                     String[] newArgs = new String[args.length - i];
                     System.arraycopy(args, i, newArgs, 0, newArgs.length);
 
+                    // Create new context with adjusted args
+                    final CommandContext subContext = new CommandContext(commandSender, newArgs, commandName);
+                    
                     // now process the command
-                    processRequirements(sub, commandSender, newArgs);
+                    processRequirements(sub, subContext);
                     return true;
                 }
             }
 
             // if we've gotten this far, then just use the command we have
             if (nested.parent != null) {
-                processRequirements(nested.parent, commandSender, args);
+                processRequirements(nested.parent, context);
                 return true;
             }
         }
@@ -245,7 +258,12 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 
         if (nested != null) {
             if (args.length == 0 || nested.children.isEmpty()) {
-                return nested.parent != null ? nested.parent.tab(sender, args) : null;
+                if (nested.parent != null) {
+                    final CommandContext context = new CommandContext(sender, args, command.getName());
+                    final List<String> result = nested.parent.tabInternal(context);
+                    return result != null ? result : Collections.emptyList();
+                }
+                return Collections.emptyList();
             }
 
             // check for each sub-command that they have access to
@@ -255,69 +273,87 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
             if (args.length == 1) {
                 // suggest sub-commands that this user has access to
                 final String arg = args[0].toLowerCase();
-                return nested.children.entrySet().stream()
-                        .filter(e -> !console || !e.getValue().isNoConsole())
-                        .filter(e -> e.getKey().startsWith(arg))
-                        .filter(e -> op || e.getValue().getPermissionNode() == null || sender.hasPermission(e.getValue().getPermissionNode()))
-                        .map(Map.Entry::getKey)
-                        .toList();
+                final List<String> suggestions = new ArrayList<>();
+                
+                // Optimized: Direct iteration instead of stream for better performance
+                for (Map.Entry<String, Command> entry : nested.children.entrySet()) {
+                    final String key = entry.getKey();
+                    final Command cmd = entry.getValue();
+                    
+                    if (key.startsWith(arg)) {
+                        if ((!console || !cmd.isNoConsole()) && 
+                            (op || cmd.getPermissionNode() == null || sender.hasPermission(cmd.getPermissionNode()))) {
+                            suggestions.add(key);
+                        }
+                    }
+                }
+                
+                return suggestions;
             }
 
             // more than one arg, let's check to see if we have a command here
             final String subCmd = getSubCommand(nested, args);
             Command sub;
             if (subCmd != null && (sub = nested.children.get(subCmd)) != null && (!console || !sub.isNoConsole()) && (op || sub.getPermissionNode() == null || sender.hasPermission(sub.getPermissionNode()))) {
-                // adjust the arguments to match - BREAKING!!
+                // adjust the arguments to match
                 int i = subCmd.indexOf(' ') == -1 ? 1 : 2;
                 final String[] newArgs = new String[args.length - i];
                 System.arraycopy(args, i, newArgs, 0, newArgs.length);
 
+                // Create context for tab completion
+                final CommandContext context = new CommandContext(sender, newArgs, command.getName());
+                
                 // we're good to go!
-                return fetchList(sub, newArgs, sender);
+                return fetchList(sub, context);
             }
         }
 
         return Collections.emptyList();
     }
 
+    /**
+     * Optimized subcommand matching using pre-computed keys
+     */
     private String getSubCommand(NestedCommand nested, String[] args) {
+        if (args.length == 0) {
+            return null;
+        }
+        
         final String cmd = args[0].toLowerCase();
+        
+        // Fast path: exact single-word match
         if (nested.children.containsKey(cmd)) {
             return cmd;
         }
 
-        String match = null;
-        // support for mulit-argument subcommands
-        if (args.length >= 2 && nested.children.keySet().stream().anyMatch(k -> k.indexOf(' ') != -1)) {
-            for (int len = args.length; len > 1; --len) {
-                final String cmd2 = String.join(" ", Arrays.copyOf(args, len)).toLowerCase();
-                if (nested.children.containsKey(cmd2)) {
-                    return cmd2;
+        // Optimized: Check multi-word subcommands only if they exist
+        if (args.length >= 2 && nested.hasMultiWordSubcommands()) {
+            // Build command string incrementally (more efficient than copying arrays)
+            StringBuilder sb = new StringBuilder(cmd);
+            for (int i = 1; i < args.length; i++) {
+                sb.append(' ').append(args[i].toLowerCase());
+                String candidate = sb.toString();
+                if (nested.children.containsKey(candidate)) {
+                    return candidate;
                 }
             }
         }
 
-        // if we don't have a subcommand, should we search for one?
+        // Loose command matching (if enabled)
         if (allowLooseCommands) {
-            // do a "closest match"
-            int count = 0;
-            for (String c : nested.children.keySet()) {
-                if (c.startsWith(cmd)) {
-                    match = c;
-                    if (++count > 1) {
-                        // there can only be one!
-                        match = null;
-                        break;
-                    }
-                }
-            }
+            return nested.findClosestMatch(cmd);
         }
 
-        return match;
+        return null;
     }
 
-    private void processRequirements(Command command, CommandSender sender, String[] args) {
-            if (sender instanceof Player && command.getAllowedExecutor() == AllowedExecutor.CONSOLE) {
+    /**
+     * Process command requirements and execute with context
+     */
+    private void processRequirements(Command command, CommandContext context) {
+        final CommandSender sender = context.getSender();
+        
+        if (sender instanceof Player && command.getAllowedExecutor() == AllowedExecutor.CONSOLE) {
             Common.tell(sender, consoleOnlyMessage);
             return;
         }
@@ -328,7 +364,8 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
         }
 
         if (command.getPermissionNode() == null || sender.hasPermission(command.getPermissionNode())) {
-            final ReturnType returnType = command.execute(sender, args);
+            // Use new context-based execution (with backwards compatibility)
+            final ReturnType returnType = command.executeInternal(context);
 
             if (returnType == ReturnType.REQUIRES_PLAYER) {
                 Common.tell(sender, playerOnlyMessage);
@@ -353,22 +390,48 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 
         Common.tell(sender, noPermissionMessage);
     }
+    
+    /**
+     * Legacy method for backwards compatibility
+     * @deprecated Use {@link #processRequirements(Command, CommandContext)} instead
+     */
+    @Deprecated
+    private void processRequirements(Command command, CommandSender sender, String[] args) {
+        processRequirements(command, new CommandContext(sender, args, ""));
+    }
 
-    private List<String> fetchList(Command Command, String[] args, CommandSender sender) {
-        final List<String> list = Command.tab(sender, args);
+    /**
+     * Fetch tab completion list with context
+     */
+    private List<String> fetchList(Command command, CommandContext context) {
+        final List<String> list = command.tabInternal(context);
 
-        if (args.length != 0) {
-            final String str = args[args.length - 1];
+        if (context.getArgCount() != 0) {
+            final String str = context.getArg(context.getArgCount() - 1);
 
             if (list != null && str != null && str.length() >= 1) {
+                final String lowerStr = str.toLowerCase();
                 try {
-                    list.removeIf(s -> !s.toLowerCase().startsWith(str.toLowerCase()));
+                    list.removeIf(s -> !s.toLowerCase().startsWith(lowerStr));
                 } catch (UnsupportedOperationException ignore) {
+                    // List is immutable, create new filtered list
+                    return list.stream()
+                            .filter(s -> s.toLowerCase().startsWith(lowerStr))
+                            .toList();
                 }
             }
         }
 
-        return list;
+        return list != null ? list : Collections.emptyList();
+    }
+    
+    /**
+     * Legacy method for backwards compatibility
+     * @deprecated Use {@link #fetchList(Command, CommandContext)} instead
+     */
+    @Deprecated
+    private List<String> fetchList(Command command, String[] args, CommandSender sender) {
+        return fetchList(command, new CommandContext(sender, args, ""));
     }
 
     public static void registerCommandDynamically(Plugin plugin, String command, CommandExecutor executor, TabCompleter tabManager) {
@@ -400,6 +463,11 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
             knownCommands.put(command, commandObject);
         } catch (ReflectiveOperationException ex) {
             plugin.getLogger().severe("Error registering command dynamically: " + ex.getMessage());
+            plugin.getLogger().severe("Stack trace:");
+            ex.printStackTrace();
+        } catch (Exception ex) {
+            plugin.getLogger().severe("Unexpected error registering command dynamically: " + ex.getMessage());
+            plugin.getLogger().severe("Stack trace:");
             ex.printStackTrace();
         }
     }
@@ -419,7 +487,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to set up command timings: " + e.getMessage());
-            // Continue execution even if timings setup fails
+                e.printStackTrace();
         }
     }
 
@@ -509,3 +577,4 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
     };
 
 }
+

@@ -21,7 +21,7 @@ package ca.tweetzy.flight.config.yaml;
 import ca.tweetzy.flight.config.HeaderCommentable;
 import ca.tweetzy.flight.config.IConfiguration;
 import ca.tweetzy.flight.config.NodeCommentable;
-import org.apache.commons.lang.ArrayUtils;
+import ca.tweetzy.flight.config.ValueConverter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -44,16 +44,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-
-// TODO: Allow registering own custom value converter (e.g. Bukkit-Location to Map and back)
-//       + move the huge block from #set into such a converter and register it by default
 
 /**
  * The original author of this code is SpraxDev, the original is from SongodaCore,
  * the following code below, may not reflect the original version.
  */
 public class YamlConfiguration implements IConfiguration, HeaderCommentable, NodeCommentable {
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
+    
     protected final @NotNull Yaml yaml;
     protected final @NotNull DumperOptions yamlDumperOptions;
     protected final @NotNull YamlCommentRepresenter yamlCommentRepresenter;
@@ -61,18 +61,45 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
     protected final @NotNull Map<String, Object> values;
     protected final @NotNull Map<String, Supplier<String>> nodeComments;
     protected @Nullable Supplier<String> headerComment;
+    
+    // Key path cache to avoid repeated split() calls
+    private final @NotNull Map<String, String[]> keyPathCache = new ConcurrentHashMap<>();
+    
+    // Value converters for type conversion
+    private final @NotNull List<ValueConverter> valueConverters;
 
     public YamlConfiguration() {
-        this(new LinkedHashMap<>(), new LinkedHashMap<>());
+        this(new LinkedHashMap<>(DEFAULT_INITIAL_CAPACITY), new LinkedHashMap<>(DEFAULT_INITIAL_CAPACITY));
     }
 
     protected YamlConfiguration(@NotNull Map<String, Object> values, @NotNull Map<String, Supplier<String>> nodeComments) {
         this.values = Objects.requireNonNull(values);
         this.nodeComments = Objects.requireNonNull(nodeComments);
+        this.valueConverters = new ArrayList<>(YamlValueConverters.createDefaultConverters());
 
         this.yamlDumperOptions = createDefaultYamlDumperOptions();
         this.yamlCommentRepresenter = new YamlCommentRepresenter(this.yamlDumperOptions, this.nodeComments);
         this.yaml = createDefaultYaml(this.yamlDumperOptions, this.yamlCommentRepresenter);
+    }
+    
+    /**
+     * Registers a custom value converter
+     *
+     * @param converter The converter to register
+     */
+    public void registerConverter(@NotNull ValueConverter converter) {
+        this.valueConverters.add(Objects.requireNonNull(converter));
+    }
+    
+    /**
+     * Gets or computes the key path array for a given key
+     *
+     * @param key The configuration key
+     * @return The split key path array
+     */
+    @NotNull
+    protected String[] getKeyPath(@NotNull String key) {
+        return this.keyPathCache.computeIfAbsent(key, k -> k.split("\\."));
     }
 
     @Override
@@ -82,12 +109,15 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
             return false;
         }
 
-        String[] fullKeyPath = key.split("\\.");
+        String[] fullKeyPath = getKeyPath(key);
+        String[] parentPath = Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1);
 
-        Map<String, ?> innerMap = getInnerMap(this.values, Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1), false);
+        synchronized (this.values) {
+            Map<String, ?> innerMap = getInnerMap(this.values, parentPath, false);
 
-        if (innerMap != null) {
-            return innerMap.containsKey(fullKeyPath[fullKeyPath.length - 1]);
+            if (innerMap != null) {
+                return innerMap.containsKey(fullKeyPath[fullKeyPath.length - 1]);
+            }
         }
 
         return false;
@@ -100,9 +130,11 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
             return null;
         }
 
-        try {
-            return getInnerValueForKey(this.values, key);
-        } catch (IllegalArgumentException ignore) {
+        synchronized (this.values) {
+            try {
+                return getInnerValueForKey(this.values, key);
+            } catch (IllegalArgumentException ignore) {
+            }
         }
 
         return null;
@@ -122,14 +154,18 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
         }
 
         if (key.equals("")) {
-            return Collections.unmodifiableSet(this.values.keySet());
+            synchronized (this.values) {
+                return Collections.unmodifiableSet(this.values.keySet());
+            }
         }
 
         Map<String, ?> innerMap = null;
 
-        try {
-            innerMap = getInnerMap(this.values, key.split("\\."), false);
-        } catch (IllegalArgumentException ignore) {
+        synchronized (this.values) {
+            try {
+                innerMap = getInnerMap(this.values, getKeyPath(key), false);
+            } catch (IllegalArgumentException ignore) {
+            }
         }
 
         if (innerMap != null) {
@@ -143,62 +179,41 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
     @Override
     public Object set(@NotNull String key, @Nullable Object value) {
         if (value != null) {
-            if (value instanceof Float) {
-                value = ((Float) value).doubleValue();
-            } else if (value instanceof Character) {
-                value = ((Character) value).toString();
-            } else if (value.getClass().isEnum()) {
-                value = ((Enum<?>) value).name();
-            } else if (value.getClass().isArray()) {
-                if (value instanceof int[]) {
-                    value = Arrays.asList(ArrayUtils.toObject((int[]) value));
-                } else if (value instanceof long[]) {
-                    value = Arrays.asList(ArrayUtils.toObject((long[]) value));
-                } else if (value instanceof short[]) {
-                    List<Integer> newValue = new ArrayList<>(((short[]) value).length);
-                    for (Short s : (short[]) value) {
-                        newValue.add(s.intValue());
-                    }
-                    value = newValue;
-                } else if (value instanceof byte[]) {
-                    List<Integer> newValue = new ArrayList<>(((byte[]) value).length);
-                    for (Byte b : (byte[]) value) {
-                        newValue.add(b.intValue());
-                    }
-                    value = newValue;
-                } else if (value instanceof double[]) {
-                    value = Arrays.asList(ArrayUtils.toObject((double[]) value));
-                } else if (value instanceof float[]) {
-                    List<Double> newValue = new ArrayList<>(((float[]) value).length);
-                    for (float f : (float[]) value) {
-                        newValue.add(new Float(f).doubleValue());
-                    }
-                    value = newValue;
-                } else if (value instanceof boolean[]) {
-                    value = Arrays.asList(ArrayUtils.toObject((boolean[]) value));
-                } else if (value instanceof char[]) {
-                    List<String> newValue = new ArrayList<>(((char[]) value).length);
-                    for (char c : (char[]) value) {
-                        newValue.add(String.valueOf(c));
-                    }
-                    value = newValue;
-                } else {
-                    value = Arrays.asList((Object[]) value);
+            // Try each converter until one handles the value
+            for (ValueConverter converter : this.valueConverters) {
+                Object converted = converter.convert(value);
+                if (converted != null) {
+                    value = converted;
+                    break;
                 }
             }
         }
 
-        return setInnerValueForKey(this.values, key, value);
+        synchronized (this.values) {
+            return setInnerValueForKey(this.values, key, value);
+        }
     }
 
     @Override
     public Object unset(String key) {
-        String[] fullKeyPath = key.split("\\.");
+        if (key == null) {
+            return null;
+        }
+        
+        String[] fullKeyPath = getKeyPath(key);
+        String[] parentPath = Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1);
 
-        Map<String, ?> innerMap = getInnerMap(this.values, Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1), false);
+        synchronized (this.values) {
+            Map<String, ?> innerMap = getInnerMap(this.values, parentPath, false);
 
-        if (innerMap != null) {
-            return innerMap.remove(fullKeyPath[fullKeyPath.length - 1]);
+            if (innerMap != null) {
+                Object removed = ((Map<String, Object>) innerMap).remove(fullKeyPath[fullKeyPath.length - 1]);
+                // Clear cache entry if key was removed
+                if (removed != null) {
+                    this.keyPathCache.remove(key);
+                }
+                return removed;
+            }
         }
 
         return null;
@@ -206,7 +221,10 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
 
     @Override
     public void reset() {
-        this.values.clear();
+        synchronized (this.values) {
+            this.values.clear();
+        }
+        this.keyPathCache.clear();
     }
 
     @Override
@@ -227,6 +245,9 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
                 this.values.put(yamlEntry.getKey().toString(), yamlEntry.getValue());
             }
         }
+        
+        // Clear key path cache since keys may have changed
+        this.keyPathCache.clear();
     }
 
     @Override
@@ -234,14 +255,18 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
         String headerCommentLines = generateHeaderCommentLines();
         writer.write(headerCommentLines);
 
-        cleanValuesMap(this.values);
+        Map<String, Object> valuesCopy;
+        synchronized (this.values) {
+            valuesCopy = new LinkedHashMap<>(this.values);
+            cleanValuesMap(valuesCopy);
+        }
 
-        if (this.values.size() > 0) {
+        if (valuesCopy.size() > 0) {
             if (headerCommentLines.length() > 0) {
                 writer.write(this.yamlDumperOptions.getLineBreak().getString());
             }
 
-            this.yaml.dump(this.values, writer);
+            this.yaml.dump(valuesCopy, writer);
         }
     }
 
@@ -315,18 +340,20 @@ public class YamlConfiguration implements IConfiguration, HeaderCommentable, Nod
         return new Yaml(new Constructor(yamlOptions), representer, dumperOptions, yamlOptions);
     }
 
-    protected static Object setInnerValueForKey(@NotNull Map<String, Object> map, @NotNull String key, @Nullable Object value) {
-        String[] fullKeyPath = key.split("\\.");
+    protected Object setInnerValueForKey(@NotNull Map<String, Object> map, @NotNull String key, @Nullable Object value) {
+        String[] fullKeyPath = getKeyPath(key);
+        String[] parentPath = Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1);
 
-        Map<String, ?> innerMap = getInnerMap(map, Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1), true);
+        Map<String, ?> innerMap = getInnerMap(map, parentPath, true);
 
         return ((Map<String, Object>) innerMap).put(fullKeyPath[fullKeyPath.length - 1], value);
     }
 
-    protected static Object getInnerValueForKey(@NotNull Map<String, Object> map, @NotNull String key) {
-        String[] fullKeyPath = key.split("\\.");
+    protected Object getInnerValueForKey(@NotNull Map<String, Object> map, @NotNull String key) {
+        String[] fullKeyPath = getKeyPath(key);
+        String[] parentPath = Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1);
 
-        Map<String, ?> innerMap = getInnerMap(map, Arrays.copyOf(fullKeyPath, fullKeyPath.length - 1), false);
+        Map<String, ?> innerMap = getInnerMap(map, parentPath, false);
 
         if (innerMap != null) {
             return innerMap.get(fullKeyPath[fullKeyPath.length - 1]);

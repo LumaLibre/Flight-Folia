@@ -21,6 +21,7 @@ package ca.tweetzy.flight.command;
 import ca.tweetzy.flight.utils.Common;
 import lombok.NonNull;
 import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,10 +38,41 @@ public abstract class Command {
 
     private final AllowedExecutor allowedExecutor;
     private final List<String> subCommands = new ArrayList<>();
+    private boolean async = false;
+    private JavaPlugin plugin;
 
     protected Command(AllowedExecutor allowedExecutor, String... subCommands) {
         this.allowedExecutor = allowedExecutor;
         this.subCommands.addAll(Arrays.asList(subCommands));
+    }
+
+    /**
+     * Set whether this command should execute asynchronously
+     * @param async true to run async, false for sync (default)
+     * @return this command instance
+     */
+    public Command setAsync(boolean async) {
+        this.async = async;
+        return this;
+    }
+
+    /**
+     * Check if this command runs asynchronously
+     */
+    public boolean isAsync() {
+        return async;
+    }
+
+    /**
+     * Set the plugin instance (required for async execution)
+     * Package-private to allow CommandManager to set it
+     */
+    void setPlugin(JavaPlugin plugin) {
+        this.plugin = plugin;
+    }
+
+    protected JavaPlugin getPlugin() {
+        return plugin;
     }
 
     public final List<String> getSubCommands() {
@@ -59,9 +91,37 @@ public abstract class Command {
         return allowedExecutor;
     }
 
+    /**
+     * Execute command (legacy method - required for backwards compatibility)
+     * New implementations should override {@link #execute(CommandContext)} instead
+     */
     protected abstract ReturnType execute(CommandSender sender, String... args);
 
+    /**
+     * Execute command with context (modern approach)
+     * Override this method for new implementations.
+     * Default implementation calls legacy method for backwards compatibility.
+     */
+    protected ReturnType execute(@NonNull CommandContext context) {
+        // Default implementation calls legacy method for backwards compatibility
+        return execute(context.getSender(), context.getArgs().toArray(new String[0]));
+    }
+
+    /**
+     * Tab completion (legacy method - required for backwards compatibility)
+     * New implementations should override {@link #tab(CommandContext)} instead
+     */
     protected abstract List<String> tab(CommandSender sender, String... args);
+
+    /**
+     * Tab completion with context (modern approach)
+     * Override this method for new implementations.
+     * Default implementation calls legacy method for backwards compatibility.
+     */
+    protected List<String> tab(@NonNull CommandContext context) {
+        // Default implementation calls legacy method for backwards compatibility
+        return tab(context.getSender(), context.getArgs().toArray(new String[0]));
+    }
 
     public abstract String getPermissionNode();
 
@@ -75,5 +135,23 @@ public abstract class Command {
 
     protected void tellNoPrefix(@NonNull final CommandSender sender, @NonNull final String msg) {
         Common.tell(sender, false, msg);
+    }
+
+    /**
+     * Internal method to execute command with async support
+     * If async is enabled, the command should use AsyncCommandExecutor
+     * for proper async execution with callbacks
+     */
+    final ReturnType executeInternal(CommandContext context) {
+        // Execute synchronously
+        // For async execution, use AsyncCommandExecutor in the command implementation
+        return execute(context);
+    }
+
+    /**
+     * Internal method for tab completion
+     */
+    final List<String> tabInternal(CommandContext context) {
+        return tab(context);
     }
 }
