@@ -34,6 +34,7 @@ import ca.tweetzy.flight.gui.methods.Openable;
 import ca.tweetzy.flight.gui.methods.Pagable;
 import ca.tweetzy.flight.utils.Common;
 import ca.tweetzy.flight.utils.QuickItem;
+import ca.tweetzy.flight.utils.input.InputSessionLock;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
@@ -146,6 +147,18 @@ public class Gui {
                 .filter(Player.class::isInstance)
                 .map(Player.class::cast)
                 .toList();
+    }
+
+    /**
+     * Returns true if the given player currently has an active input session.
+     * This is useful for GUIs to check if they should skip certain operations
+     * (like returning items) when an input is active.
+     * 
+     * @param player The player to check
+     * @return true if the player has an active input, false otherwise
+     */
+    public static boolean hasActiveInput(@NotNull Player player) {
+        return InputSessionLock.hasActiveInput(player);
     }
 
     @NotNull
@@ -568,7 +581,16 @@ public class Gui {
     public void setNextPage(int cell, @NotNull ItemStack item) {
         nextPageIndex = cell;
         nextPage = item;
-        if (page < pages) setButton(cell, item, ClickType.LEFT, e -> nextPage());
+        // Unlock the slot so clicks work
+        setUnlocked(cell, true);
+        // Always set the button, but conditionally set the action
+        setButton(cell, page < pages ? item : (nextPageItem != null ? nextPageItem : item), ClickType.LEFT, page < pages ? e -> nextPage() : null);
+        // Also set for all click types to ensure it works
+        if (page < pages) {
+            setConditional(cell, null, e -> nextPage());
+        } else {
+            setConditional(cell, null, null);
+        }
     }
 
     public void setNextPage(int row, int col, @NotNull ItemStack item) {
@@ -578,7 +600,16 @@ public class Gui {
     public void setPrevPage(int cell, @NotNull ItemStack item) {
         prevPageIndex = cell;
         prevPage = item;
-        if (page > 1) setButton(cell, item, ClickType.LEFT, e -> prevPage());
+        // Unlock the slot so clicks work
+        setUnlocked(cell, true);
+        // Always set the button, but conditionally set the action
+        setButton(cell, page > 1 ? item : (prevPageItem != null ? prevPageItem : item), ClickType.LEFT, page > 1 ? e -> prevPage() : null);
+        // Also set for all click types to ensure it works
+        if (page > 1) {
+            setConditional(cell, null, e -> prevPage());
+        } else {
+            setConditional(cell, null, null);
+        }
     }
 
     public void setPrevPage(int row, int col, @NotNull ItemStack item) {
@@ -586,8 +617,28 @@ public class Gui {
     }
 
     protected void updatePageNavigation() {
-        if (prevPage != null) setButton(prevPageIndex, page > 1 ? prevPage : prevPageItem, ClickType.LEFT, page > 1 ? e -> prevPage() : null);
-        if (nextPage != null) setButton(nextPageIndex, page < pages ? nextPage : nextPageItem, ClickType.LEFT, page < pages ? e -> nextPage() : null);
+        if (prevPage != null) {
+            // Ensure slot is unlocked
+            setUnlocked(prevPageIndex, true);
+            setButton(prevPageIndex, page > 1 ? prevPage : prevPageItem, ClickType.LEFT, page > 1 ? e -> prevPage() : null);
+            // Also set for all click types to ensure it works
+            if (page > 1) {
+                setConditional(prevPageIndex, null, e -> prevPage());
+            } else {
+                setConditional(prevPageIndex, null, null);
+            }
+        }
+        if (nextPage != null) {
+            // Ensure slot is unlocked
+            setUnlocked(nextPageIndex, true);
+            setButton(nextPageIndex, page < pages ? nextPage : nextPageItem, ClickType.LEFT, page < pages ? e -> nextPage() : null);
+            // Also set for all click types to ensure it works
+            if (page < pages) {
+                setConditional(nextPageIndex, null, e -> nextPage());
+            } else {
+                setConditional(nextPageIndex, null, null);
+            }
+        }
     }
 
     // --------------------------------------

@@ -178,8 +178,14 @@ public class GuiManager {
             }
 
             boolean cancel = event.getRawSlots().stream()
-                    .anyMatch(slot -> slot < gui.inventory.getSize() &&
-                            !gui.unlockedCells.getOrDefault(slot, false));
+                    .anyMatch(slot -> {
+                        if (slot >= gui.inventory.getSize()) return false;
+                        // Cancel if slot is locked
+                        if (!gui.unlockedCells.getOrDefault(slot, false)) return true;
+                        // Cancel if slot has a button action (buttons shouldn't be draggable)
+                        if (gui.conditionalButtons.containsKey(slot)) return true;
+                        return false;
+                    });
             if (cancel) {
                 event.setCancelled(true);
                 event.setResult(Event.Result.DENY);

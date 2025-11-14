@@ -60,15 +60,21 @@ public abstract class Input implements Listener, Runnable {
     private boolean closed = false;
     private boolean exiting = false;
     private Gui savedGui = null;
+    private boolean preserveSession = false;
 
     public Input(@NonNull final JavaPlugin plugin, @NonNull final Player player) {
         this.plugin = plugin;
         this.player = player;
         
+        // Register this input as active
+        InputSessionLock.start(player.getUniqueId(), this);
+        
         // Save reference to open GUI and ensure it allows closing
         this.savedGui = GUISessionLock.get(player.getUniqueId());
         if (this.savedGui != null) {
             this.savedGui.setAllowClose(true);
+            // Preserve the session lock so GUI can reopen after input
+            this.preserveSession = true;
         }
         
         Bukkit.getServer().getScheduler().runTaskLater(plugin, player::closeInventory, 1L);
@@ -167,9 +173,27 @@ public abstract class Input implements Listener, Runnable {
                 Gui gui = getGuiFromHolder(e.getInventory().getHolder());
                 if (gui != null) {
                     gui.setAllowClose(true);
+                    // Preserve session lock if we have a saved GUI
+                    if (this.preserveSession && this.savedGui != null && gui == this.savedGui) {
+                        // Restore session lock after GuiManager finishes processing (runs on next tick)
+                        // GuiManager's close handler runs at LOW priority and schedules a task, so we run after that
+                        Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                            if (!this.closed && this.preserveSession) {
+                                GUISessionLock.start(this.player.getUniqueId(), this.savedGui);
+                            }
+                        }, 2L);
+                    }
                 } else if (this.savedGui != null) {
                     // Fallback to saved GUI if reflection fails
                     this.savedGui.setAllowClose(true);
+                    // Preserve session lock
+                    if (this.preserveSession) {
+                        Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                            if (!this.closed && this.preserveSession) {
+                                GUISessionLock.start(this.player.getUniqueId(), this.savedGui);
+                            }
+                        }, 2L);
+                    }
                 }
             }
         }
@@ -216,8 +240,15 @@ public abstract class Input implements Listener, Runnable {
         if (this.closed) return; // Prevent double-closing
         this.closed = true;
         
+        // Unregister this input as active
+        InputSessionLock.end(this.player.getUniqueId());
+        
         HandlerList.unregisterAll(this);
         this.task.cancel();
+        
+        // Clear the preserve session flag when closing
+        this.preserveSession = false;
+        
         if (!completed) {
             // Mark that we're exiting to prevent InventoryOpenEvent from interfering
             this.exiting = true;
