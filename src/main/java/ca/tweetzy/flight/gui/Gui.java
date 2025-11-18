@@ -436,6 +436,7 @@ public class Gui {
         manager.showGUI(player, newGui);
     }
 
+
     public Gui exit() {
         allowClose = true;
         open = false;

@@ -62,6 +62,10 @@ public class GuiManager {
     /**
      * Opens the specified GUI for a player.
      * Safe to call from async context; the open happens on the main thread.
+     * 
+     * This method automatically detects if there's an existing GUI open for the player
+     * and uses safe transition logic to prevent setOnClose handlers from running.
+     * This ensures backwards compatibility while providing safe transitions.
      */
     public void showGUI(Player player, Gui gui) {
         if (shutdown || !initialized) {
@@ -70,7 +74,42 @@ public class GuiManager {
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             Gui previous = openInventories.put(player, gui);
-            if (previous != null) previous.open = false;
+            
+            // If there's a previous GUI open, use safe transition logic
+            if (previous != null && previous.isOpen() && previous.getPlayers().contains(player)) {
+                // Use transition logic to prevent setOnClose from running
+                previous.isTransitioning = true;
+                previous.allowClose = true;
+                previous.open = false;
+                
+                // Cancel update tasks for updating GUIs (e.g., AuctionUpdatingPagedGUI)
+                // Use reflection to safely check and cancel tasks
+                try {
+                    java.lang.reflect.Method cancelTask = previous.getClass().getMethod("cancelTask");
+                    cancelTask.invoke(previous);
+                    if (DEBUG) {
+                        Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (transitioning to " + gui.getClass().getSimpleName() + ")");
+                    }
+                } catch (NoSuchMethodException e) {
+                    // Not an updating GUI, that's fine
+                } catch (Exception e) {
+                    if (DEBUG) {
+                        Bukkit.getLogger().warning("[GuiManager] Error cancelling task for " + previous.getClass().getSimpleName() + ": " + e.getMessage());
+                    }
+                }
+            } else if (previous != null) {
+                previous.open = false;
+                // Also try to cancel task even if GUI wasn't open (safety measure)
+                try {
+                    java.lang.reflect.Method cancelTask = previous.getClass().getMethod("cancelTask");
+                    cancelTask.invoke(previous);
+                    if (DEBUG) {
+                        Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (GUI was not open)");
+                    }
+                } catch (Exception e) {
+                    // Not an updating GUI or error, that's fine
+                }
+            }
 
             Inventory inv = gui.getOrCreateInventory(this);
 
@@ -275,6 +314,21 @@ public class GuiManager {
 
             if (!gui.allowDropItems)
                 player.setItemOnCursor(null);
+
+            // Cancel update tasks for updating GUIs before closing
+            try {
+                java.lang.reflect.Method cancelTask = gui.getClass().getMethod("cancelTask");
+                cancelTask.invoke(gui);
+                if (DEBUG) {
+                    Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + gui.getClass().getSimpleName() + " (GUI closing, player: " + player.getName() + ")");
+                }
+            } catch (NoSuchMethodException e) {
+                // Not an updating GUI, that's fine
+            } catch (Exception e) {
+                if (DEBUG) {
+                    Bukkit.getLogger().warning("[GuiManager] Error cancelling task on close for " + gui.getClass().getSimpleName() + ": " + e.getMessage());
+                }
+            }
 
             Bukkit.getScheduler().runTask(manager.plugin, () -> {
                 gui.onClose(manager, player);
