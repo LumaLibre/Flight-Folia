@@ -56,7 +56,7 @@ public class SQLiteConnector implements DatabaseConnector {
         config.setMinimumIdle(1);
         config.setConnectionTimeout(30000);
         config.setIdleTimeout(600000);
-        config.setMaxLifetime(1800000);
+        config.setMaxLifetime(900000); // 15 minutes (consistent with MySQL connector)
         config.setLeakDetectionThreshold(60000);
         
         // SQLite-specific optimizations

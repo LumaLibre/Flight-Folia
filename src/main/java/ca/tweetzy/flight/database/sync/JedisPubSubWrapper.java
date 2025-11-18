@@ -22,7 +22,6 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.function.Consumer;
 
 /**

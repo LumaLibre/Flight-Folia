@@ -153,6 +153,9 @@ public class UpdateQuery extends Query {
             statement.setBoolean(index, (Boolean) value);
         } else if (value instanceof byte[]) {
             statement.setBytes(index, (byte[]) value);
+        } else if (value instanceof java.util.UUID) {
+            // Convert UUID to string to avoid serialization issues with MySQL
+            statement.setString(index, value.toString());
         } else {
             statement.setObject(index, value);
         }

@@ -159,6 +159,9 @@ public abstract class Query {
                 statement.setDouble(index, (Double) clause.value);
             } else if (clause.value instanceof Boolean) {
                 statement.setBoolean(index, (Boolean) clause.value);
+            } else if (clause.value instanceof java.util.UUID) {
+                // Convert UUID to string to avoid serialization issues with MySQL
+                statement.setString(index, clause.value.toString());
             } else {
                 statement.setObject(index, clause.value);
             }

@@ -46,7 +46,12 @@ public class MySQLConnector implements DatabaseConnector {
         config.setUsername(username);
         config.setPassword(password);
         config.setMaximumPoolSize(3);
-        config.setMaxLifetime(20000);
+        config.setConnectionTimeout(30000); // 30 seconds
+        config.setMaxLifetime(900000); // 15 minutes (well below MySQL's typical wait_timeout)
+        config.setIdleTimeout(600000); // 10 minutes
+        config.setValidationTimeout(5000); // 5 seconds
+        config.setLeakDetectionThreshold(60000); // 60 seconds
+        config.setConnectionTestQuery("SELECT 1");
 
         try {
             this.hikari = new HikariDataSource(config);

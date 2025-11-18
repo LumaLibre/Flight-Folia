@@ -18,12 +18,14 @@
 
 package ca.tweetzy.flight.database.sync;
 
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPubSub;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -33,63 +35,27 @@ import java.util.concurrent.Executors;
 
 /**
  * Manages Redis-based database synchronization for multi-server setups
- * Uses reflection to load Jedis classes at runtime
  */
 public class RedisSyncManager {
     
     private final Plugin plugin;
     private final String serverId;
     private final String channel;
-    private Object jedisPool; // JedisPool loaded via reflection
-    private Object pubSub; // JedisPubSub loaded via reflection
+    private JedisPool jedisPool;
+    private JedisPubSub pubSub;
     private final List<DatabaseEventListener> listeners = new ArrayList<>();
     private final ExecutorService executorService = Executors.newCachedThreadPool();
     private boolean enabled = false;
     private Thread subscriberThread;
-    private boolean jedisAvailable = false;
-    
-    // Reflection classes
-    private Class<?> jedisPoolClass;
-    private Class<?> jedisPoolConfigClass;
-    private Class<?> jedisClass;
-    private Class<?> jedisPubSubClass;
+    private Thread healthCheckThread;
+    private int reconnectAttempts = 0;
+    private static final long HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
+    private static final int MAX_RECONNECT_ATTEMPTS = 5;
     
     public RedisSyncManager(@NotNull Plugin plugin, @NotNull String channel) {
         this.plugin = plugin;
         this.serverId = UUID.randomUUID().toString();
         this.channel = channel;
-        checkJedisAvailability();
-    }
-    
-    /**
-     * Check if Jedis classes are available
-     */
-    private void checkJedisAvailability() {
-        try {
-            // Try to load Jedis classes - they may be in relocated package
-            String[] possiblePackages = {
-                    "redis.clients.jedis",
-                    "ca.tweetzy.flight.third_party.redis.clients.jedis"
-            };
-            
-            for (String pkg : possiblePackages) {
-                try {
-                    jedisPoolClass = Class.forName(pkg + ".JedisPool");
-                    jedisPoolConfigClass = Class.forName(pkg + ".JedisPoolConfig");
-                    jedisClass = Class.forName(pkg + ".Jedis");
-                    jedisPubSubClass = Class.forName(pkg + ".JedisPubSub");
-                    jedisAvailable = true;
-                    return;
-                } catch (ClassNotFoundException ignored) {
-                    // Try next package
-                }
-            }
-            
-            jedisAvailable = false;
-        } catch (Exception e) {
-            jedisAvailable = false;
-            plugin.getLogger().warning("Failed to check Jedis availability: " + e.getMessage());
-        }
     }
     
     /**
@@ -101,49 +67,61 @@ public class RedisSyncManager {
      * @return true if initialization was successful
      */
     public boolean initialize(@NotNull String host, int port, @Nullable String password) {
-        if (!jedisAvailable) {
+        // Check if Jedis classes are available at runtime
+        // Try multiple classloaders since dependency loader may have loaded them
+        ClassLoader[] classLoaders = {
+            plugin.getClass().getClassLoader(),
+            Thread.currentThread().getContextClassLoader(),
+            ClassLoader.getSystemClassLoader()
+        };
+        
+        boolean classesAvailable = false;
+        for (ClassLoader classLoader : classLoaders) {
+            if (classLoader == null) continue;
+            try {
+                classLoader.loadClass("org.apache.commons.pool2.impl.GenericObjectPoolConfig");
+                classLoader.loadClass("redis.clients.jedis.JedisPool");
+                classLoader.loadClass("redis.clients.jedis.Jedis");
+                classesAvailable = true;
+                break;
+            } catch (ClassNotFoundException ignored) {
+                // Try next classloader
+            }
+        }
+        
+        if (!classesAvailable) {
             plugin.getLogger().warning("Jedis is not available. Redis sync requires Jedis to be loaded. Make sure to call getOptionalDependencies() in your plugin's onLoad().");
             return false;
         }
         
         try {
-            // Create JedisPoolConfig via reflection
-            Object poolConfig = jedisPoolConfigClass.getDeclaredConstructor().newInstance();
-            jedisPoolConfigClass.getMethod("setMaxTotal", int.class).invoke(poolConfig, 10);
-            jedisPoolConfigClass.getMethod("setMaxIdle", int.class).invoke(poolConfig, 5);
-            jedisPoolConfigClass.getMethod("setMinIdle", int.class).invoke(poolConfig, 1);
-            jedisPoolConfigClass.getMethod("setTestOnBorrow", boolean.class).invoke(poolConfig, true);
-            jedisPoolConfigClass.getMethod("setTestOnReturn", boolean.class).invoke(poolConfig, true);
+            // Create GenericObjectPoolConfig for JedisPool
+            GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
+            poolConfig.setMaxTotal(10);
+            poolConfig.setMaxIdle(5);
+            poolConfig.setMinIdle(1);
+            poolConfig.setTestOnBorrow(true);
+            poolConfig.setTestOnReturn(true);
             
-            // Create JedisPool via reflection
-            Constructor<?> poolConstructor;
+            // Create JedisPool
             if (password != null && !password.isEmpty()) {
-                poolConstructor = jedisPoolClass.getConstructor(
-                        jedisPoolConfigClass, String.class, int.class, int.class, String.class
-                );
-                this.jedisPool = poolConstructor.newInstance(poolConfig, host, port, 2000, password);
+                this.jedisPool = new JedisPool(poolConfig, host, port, 2000, password);
             } else {
-                poolConstructor = jedisPoolClass.getConstructor(
-                        jedisPoolConfigClass, String.class, int.class, int.class
-                );
-                this.jedisPool = poolConstructor.newInstance(poolConfig, host, port, 2000);
+                this.jedisPool = new JedisPool(poolConfig, host, port, 2000);
             }
             
             // Test connection
-            Method getResourceMethod = jedisPoolClass.getMethod("getResource");
-            Object jedis = getResourceMethod.invoke(jedisPool);
-            try {
-                Method pingMethod = jedisClass.getMethod("ping");
-                pingMethod.invoke(jedis);
-            } finally {
-                // Close Jedis
-                if (jedis instanceof AutoCloseable) {
-                    ((AutoCloseable) jedis).close();
+            try (Jedis jedis = jedisPool.getResource()) {
+                String result = jedis.ping();
+                if (!"PONG".equals(result)) {
+                    throw new Exception("Redis ping returned unexpected result: " + result);
                 }
             }
             
             this.enabled = true;
+            this.reconnectAttempts = 0;
             startSubscriber();
+            startHealthCheck();
             
             plugin.getLogger().info("Redis sync manager initialized successfully");
             return true;
@@ -164,8 +142,7 @@ public class RedisSyncManager {
         }
         
         try {
-            Method isClosedMethod = jedisPoolClass.getMethod("isClosed");
-            return !(Boolean) isClosedMethod.invoke(jedisPool);
+            return !jedisPool.isClosed();
         } catch (Exception e) {
             return false;
         }
@@ -180,18 +157,9 @@ public class RedisSyncManager {
         }
         
         CompletableFuture.runAsync(() -> {
-            try {
-                Method getResourceMethod = jedisPoolClass.getMethod("getResource");
-                Object jedis = getResourceMethod.invoke(jedisPool);
-                try {
-                    String json = event.toJson();
-                    Method publishMethod = jedisClass.getMethod("publish", String.class, String.class);
-                    publishMethod.invoke(jedis, channel, json);
-                } finally {
-                    if (jedis instanceof AutoCloseable) {
-                        ((AutoCloseable) jedis).close();
-                    }
-                }
+            try (Jedis jedis = jedisPool.getResource()) {
+                String json = event.toJson();
+                jedis.publish(channel, json);
             } catch (Exception ex) {
                 plugin.getLogger().warning("Failed to publish database event: " + ex.getMessage());
                 ex.printStackTrace();
@@ -226,22 +194,13 @@ public class RedisSyncManager {
         }
         
         try {
-            // Create JedisPubSub via reflection
-            pubSub = jedisPubSubClass.getDeclaredConstructor().newInstance();
+            // Create JedisPubSub proxy that handles messages
+            pubSub = createPubSubProxy();
             
             subscriberThread = new Thread(() -> {
                 while (enabled && !Thread.currentThread().isInterrupted()) {
-                    try {
-                        Method getResourceMethod = jedisPoolClass.getMethod("getResource");
-                        Object jedis = getResourceMethod.invoke(jedisPool);
-                        try {
-                            Method subscribeMethod = jedisClass.getMethod("subscribe", jedisPubSubClass, String.class);
-                            subscribeMethod.invoke(jedis, pubSub, channel);
-                        } finally {
-                            if (jedis instanceof AutoCloseable) {
-                                ((AutoCloseable) jedis).close();
-                            }
-                        }
+                    try (Jedis jedis = jedisPool.getResource()) {
+                        jedis.subscribe(pubSub, channel);
                     } catch (Exception ex) {
                         if (enabled) {
                             plugin.getLogger().warning("Redis subscriber error: " + ex.getMessage());
@@ -256,9 +215,6 @@ public class RedisSyncManager {
                 }
             }, "Redis-Subscriber-" + plugin.getName());
             
-            // Use reflection to set up message handler
-            setupPubSubHandlers();
-            
             subscriberThread.setDaemon(true);
             subscriberThread.start();
         } catch (Exception e) {
@@ -268,12 +224,249 @@ public class RedisSyncManager {
     }
     
     /**
-     * Set up PubSub message handlers using reflection
+     * Create a JedisPubSub instance that handles incoming messages
      */
-    private void setupPubSubHandlers() {
-        // We need to create a proxy or use a different approach
-        // For now, we'll handle messages in the subscriber thread
-        // This is a simplified version - in production you might want to use a proxy
+    private JedisPubSub createPubSubProxy() {
+        // JedisPubSub is an abstract class, not an interface, so we need to extend it
+        return new JedisPubSub() {
+            @Override
+            public void onMessage(String channel, String message) {
+                handleIncomingMessage(channel, message);
+            }
+        };
+    }
+    
+    /**
+     * Handle an incoming message from Redis
+     */
+    private void handleIncomingMessage(@NotNull String channel, @NotNull String message) {
+        if (!channel.equals(this.channel)) {
+            return; // Ignore messages from other channels
+        }
+        
+        // Check if plugin is enabled before processing
+        if (!enabled) {
+            return; // Plugin is disabled, ignore messages
+        }
+        
+        // Check if plugin is still enabled (may have been disabled between check and execution)
+        // Wrap in try-catch because isEnabled() might throw if classloader is closed
+        boolean pluginEnabled;
+        try {
+            pluginEnabled = plugin.isEnabled();
+        } catch (IllegalStateException | NoClassDefFoundError e) {
+            // Classloader closed - plugin is disabled/reloading
+            return; // Silently ignore
+        }
+        
+        if (!pluginEnabled) {
+            return; // Plugin is disabled, ignore messages
+        }
+        
+        executorService.execute(() -> {
+            // Double-check plugin state in async thread
+            if (!enabled) {
+                return; // Plugin was disabled, ignore
+            }
+            
+            // Check plugin state safely
+            boolean stillEnabled;
+            try {
+                stillEnabled = plugin.isEnabled();
+            } catch (IllegalStateException | NoClassDefFoundError e) {
+                // Classloader closed - silently ignore
+                return;
+            }
+            
+            if (!stillEnabled) {
+                return; // Plugin was disabled, ignore
+            }
+            
+            try {
+                DatabaseEvent event;
+                try {
+                    event = DatabaseEvent.fromJson(message);
+                } catch (IllegalStateException e) {
+                    // Classloader closed - plugin likely disabled/reloading
+                    // Check if it's a "zip file closed" error - if so, silently ignore
+                    String msg = e.getMessage();
+                    if (msg != null && (msg.contains("zip file closed") || msg.contains("classloader"))) {
+                        return; // Silently ignore classloader closed errors
+                    }
+                    // For other IllegalStateExceptions, check if plugin is still enabled
+                    try {
+                        if (plugin.isEnabled()) {
+                            plugin.getLogger().warning("Failed to deserialize Redis message: " + msg);
+                        }
+                    } catch (IllegalStateException | NoClassDefFoundError ignored) {
+                        // Classloader closed, silently ignore
+                    }
+                    return;
+                } catch (NoClassDefFoundError e) {
+                    // Class not found - classloader likely closed, silently ignore
+                    return;
+                }
+                
+                // Don't process events from this server
+                if (event.getServerId().equals(serverId)) {
+                    return;
+                }
+                
+                // Route event to appropriate listeners
+                synchronized (listeners) {
+                    for (DatabaseEventListener listener : listeners) {
+                        // Check plugin state before each listener
+                        if (!enabled) {
+                            return; // Plugin was disabled, stop processing
+                        }
+                        
+                        // Check plugin state safely
+                        try {
+                            if (!plugin.isEnabled()) {
+                                return; // Plugin disabled, stop processing
+                            }
+                        } catch (IllegalStateException | NoClassDefFoundError e) {
+                            // Classloader closed, silently ignore
+                            return;
+                        }
+                        
+                        try {
+                            // Check if listener is interested in this table
+                            String listenerTable = listener.getTableName();
+                            String listenerPrefix = listener.getTablePrefix();
+                            
+                            if (listenerTable != null && !listenerTable.equals(event.getTableName())) {
+                                continue; // Skip if table doesn't match
+                            }
+                            
+                            if (listenerPrefix != null && !listenerPrefix.equals(event.getTablePrefix())) {
+                                continue; // Skip if prefix doesn't match
+                            }
+                            
+                            listener.onDatabaseEvent(event);
+                        } catch (IllegalStateException e) {
+                            // Plugin classloader closed - check if it's a classloader issue
+                            String msg = e.getMessage();
+                            if (msg != null && (msg.contains("zip file closed") || msg.contains("classloader"))) {
+                                // Silently ignore classloader closed errors
+                                continue;
+                            }
+                            // For other errors, check if plugin is still enabled
+                            try {
+                                if (plugin.isEnabled()) {
+                                    plugin.getLogger().warning("Error in database event listener: " + msg);
+                                }
+                            } catch (IllegalStateException | NoClassDefFoundError ignored) {
+                                // Classloader closed, silently ignore
+                            }
+                        } catch (NoClassDefFoundError e) {
+                            // Classloader issue - silently ignore
+                            continue;
+                        } catch (Exception ex) {
+                            try {
+                                if (plugin.isEnabled()) {
+                                    plugin.getLogger().warning("Error in database event listener: " + ex.getMessage());
+                                    ex.printStackTrace();
+                                }
+                            } catch (IllegalStateException | NoClassDefFoundError ignored) {
+                                // Classloader closed, silently ignore
+                            }
+                        }
+                    }
+                }
+            } catch (IllegalStateException e) {
+                // Plugin classloader closed - check if it's a classloader issue
+                String msg = e.getMessage();
+                if (msg != null && (msg.contains("zip file closed") || msg.contains("classloader"))) {
+                    // Silently ignore classloader closed errors
+                    return;
+                }
+                // For other errors, check if plugin is still enabled
+                try {
+                    if (plugin.isEnabled()) {
+                        plugin.getLogger().warning("Failed to process incoming Redis message: " + msg);
+                    }
+                } catch (IllegalStateException | NoClassDefFoundError ignored) {
+                    // Classloader closed, silently ignore
+                }
+            } catch (NoClassDefFoundError e) {
+                // Classloader issue - silently ignore
+                return;
+            } catch (Exception ex) {
+                try {
+                    if (plugin.isEnabled()) {
+                        plugin.getLogger().warning("Failed to process incoming Redis message: " + ex.getMessage());
+                        ex.printStackTrace();
+                    }
+                } catch (IllegalStateException | NoClassDefFoundError ignored) {
+                    // Classloader closed, silently ignore
+                }
+            }
+        });
+    }
+    
+    /**
+     * Start health check thread
+     */
+    private void startHealthCheck() {
+        if (healthCheckThread != null && healthCheckThread.isAlive()) {
+            return;
+        }
+        
+        healthCheckThread = new Thread(() -> {
+            while (enabled && !Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(HEALTH_CHECK_INTERVAL);
+                    
+                    if (!isEnabled()) {
+                        plugin.getLogger().warning("Redis connection lost, attempting to reconnect...");
+                        attemptReconnect();
+                    } else {
+                        reconnectAttempts = 0; // Reset on successful check
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Health check error: " + e.getMessage());
+                }
+            }
+        }, "Redis-HealthCheck-" + plugin.getName());
+        
+        healthCheckThread.setDaemon(true);
+        healthCheckThread.start();
+    }
+    
+    /**
+     * Attempt to reconnect to Redis with exponential backoff
+     */
+    private void attemptReconnect() {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            plugin.getLogger().severe("Max reconnection attempts reached. Redis sync disabled.");
+            enabled = false;
+            return;
+        }
+        
+        reconnectAttempts++;
+        long backoffDelay = (long) Math.pow(2, reconnectAttempts) * 1000; // Exponential backoff
+        
+        try {
+            Thread.sleep(backoffDelay);
+            
+            // Test connection
+            try (Jedis jedis = jedisPool.getResource()) {
+                String result = jedis.ping();
+                if ("PONG".equals(result)) {
+                    plugin.getLogger().info("Redis reconnection successful");
+                    reconnectAttempts = 0;
+                    if (!subscriberThread.isAlive()) {
+                        startSubscriber();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Reconnection attempt " + reconnectAttempts + " failed: " + e.getMessage());
+        }
     }
     
     /**
@@ -282,10 +475,18 @@ public class RedisSyncManager {
     public void shutdown() {
         enabled = false;
         
+        if (healthCheckThread != null && healthCheckThread.isAlive()) {
+            healthCheckThread.interrupt();
+            try {
+                healthCheckThread.join(5000);
+            } catch (InterruptedException ex) {
+                // Ignore
+            }
+        }
+        
         if (pubSub != null) {
             try {
-                Method unsubscribeMethod = jedisPubSubClass.getMethod("unsubscribe");
-                unsubscribeMethod.invoke(pubSub);
+                pubSub.unsubscribe();
             } catch (Exception ex) {
                 // Ignore
             }
@@ -302,19 +503,25 @@ public class RedisSyncManager {
         
         if (jedisPool != null) {
             try {
-                Method isClosedMethod = jedisPoolClass.getMethod("isClosed");
-                boolean closed = (Boolean) isClosedMethod.invoke(jedisPool);
-                if (!closed) {
-                    if (jedisPool instanceof AutoCloseable) {
-                        ((AutoCloseable) jedisPool).close();
-                    }
+                if (!jedisPool.isClosed()) {
+                    jedisPool.close();
                 }
             } catch (Exception ex) {
                 // Ignore
             }
         }
         
+        // Shutdown executor service gracefully
         executorService.shutdown();
+        try {
+            // Wait a bit for tasks to complete, but don't wait forever
+            if (!executorService.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                executorService.shutdownNow(); // Force shutdown
+            }
+        } catch (InterruptedException ex) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         
         plugin.getLogger().info("Redis sync manager shut down");
     }
@@ -326,5 +533,22 @@ public class RedisSyncManager {
     public String getServerId() {
         return serverId;
     }
+    
+    /**
+     * Get the JedisPool (for internal use by RedisLockManager and external plugins)
+     * @return The JedisPool instance
+     */
+    @Nullable
+    public JedisPool getJedisPool() {
+        return jedisPool;
+    }
+    
+    /**
+     * Get Jedis class (for internal use by RedisLockManager and external plugins)
+     * @return The Jedis class
+     */
+    @NotNull
+    public Class<Jedis> getJedisClass() {
+        return Jedis.class;
+    }
 }
-

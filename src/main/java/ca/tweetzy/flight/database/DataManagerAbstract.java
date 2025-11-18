@@ -27,6 +27,7 @@ import ca.tweetzy.flight.database.repository.Repository;
 import ca.tweetzy.flight.database.schema.SchemaManager;
 import ca.tweetzy.flight.database.sync.DatabaseEvent;
 import ca.tweetzy.flight.database.sync.DatabaseEventListener;
+import ca.tweetzy.flight.database.sync.RedisLockManager;
 import ca.tweetzy.flight.database.sync.RedisSyncManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
@@ -56,6 +57,7 @@ public class DataManagerAbstract {
     
     private QueryBuilder queryBuilder;
     private RedisSyncManager redisSyncManager;
+    private RedisLockManager redisLockManager;
     private SchemaManager schemaManager;
     private final Map<Class<?>, Repository<?, ?>> repositories = new ConcurrentHashMap<>();
 
@@ -325,6 +327,8 @@ public class DataManagerAbstract {
         boolean success = redisSyncManager.initialize(host, port, password);
         
         if (success) {
+            // Initialize lock manager
+            redisLockManager = new RedisLockManager(plugin, redisSyncManager);
             plugin.getLogger().info("Redis sync manager initialized for multi-server support");
         } else {
             plugin.getLogger().warning("Redis sync manager initialization failed - multi-server sync disabled");
@@ -341,6 +345,16 @@ public class DataManagerAbstract {
     @Nullable
     public RedisSyncManager getRedisSyncManager() {
         return redisSyncManager;
+    }
+    
+    /**
+     * Get the Redis lock manager (may be null if Redis sync is not initialized)
+     * 
+     * @return The Redis lock manager, or null if not initialized
+     */
+    @Nullable
+    public RedisLockManager getRedisLockManager() {
+        return redisLockManager;
     }
     
     /**
