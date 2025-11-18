@@ -63,6 +63,7 @@ public abstract class Input implements Listener, Runnable {
     private boolean exiting = false;
     private Gui savedGui = null;
     private boolean preserveSession = false;
+    protected boolean allowNextGuiOpen = false; // Allow next GUI to open (for transitions after input completes)
 
     public Input(@NonNull final JavaPlugin plugin, @NonNull final Player player) {
         this.plugin = plugin;
@@ -212,25 +213,60 @@ public abstract class Input implements Listener, Runnable {
                 // Set allowClose on the GUI so it won't try to reopen itself
                 Gui gui = getGuiFromHolder(e.getInventory().getHolder());
                 if (gui != null) {
-                    // Allow GUI to open if it's marked as transitioning (e.g., confirmation GUI)
-                    // This allows safe transitions from TitleInput to other GUIs
-                    if (gui.isTransitioning()) {
-                        // This is an intentional transition, allow it
+                    // Allow GUI to open if:
+                    // 1. It's marked as transitioning (intentional transition)
+                    // 2. We're allowing the next GUI open (input just completed)
+                    // 3. It's the same GUI instance as saved (GUI reopening itself)
+                    if (gui.isTransitioning() || this.allowNextGuiOpen || gui == this.savedGui) {
+                        // This is an intentional transition or completion, allow it
+                        // Reset the flag after allowing one GUI open
+                        this.allowNextGuiOpen = false;
                         return;
                     }
+                    
+                    // Check if this GUI is from the same plugin context by checking if it's transitioning
+                    // Give a small delay to allow transition flags to be set properly
+                    // This handles the case where a GUI opens right after TitleInput completes
+                    final Gui guiToCheck = gui;
+                    Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                        // Re-check after a tick to see if transition flag was set
+                        if (!this.closed && !this.exiting && guiToCheck.isTransitioning()) {
+                            // Transition flag was set, this is intentional - allow it
+                            return;
+                        }
+                        
+                        // Still not transitioning and we're still in input mode - close it
+                        if (!this.closed && !this.exiting && this.player.isOnline()) {
+                            Inventory currentTop = this.player.getOpenInventory().getTopInventory();
+                            if (currentTop != null && currentTop.equals(e.getInventory())) {
+                                this.player.closeInventory();
+                            }
+                        }
+                    }, 1L);
+                    
                     gui.setAllowClose(true);
                 } else if (this.savedGui != null) {
                     // Fallback to saved GUI if reflection fails
                     this.savedGui.setAllowClose(true);
+                    
+                    // Close with delay to allow transitions
+                    Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                        if (!this.closed && !this.exiting && this.player.isOnline()) {
+                            Inventory currentTop = this.player.getOpenInventory().getTopInventory();
+                            if (currentTop != null && currentTop.equals(e.getInventory())) {
+                                this.player.closeInventory();
+                            }
+                        }
+                    }, 1L);
+                } else {
+                    // No GUI info available, close immediately
+                    Bukkit.getScheduler().runTask(this.plugin, () -> {
+                        if (this.player.isOnline() && 
+                            this.player.getOpenInventory().getTopInventory().equals(e.getInventory())) {
+                            this.player.closeInventory();
+                        }
+                    });
                 }
-                
-                // Close the GUI immediately after it opens (InventoryOpenEvent is not cancellable)
-                Bukkit.getScheduler().runTask(this.plugin, () -> {
-                    if (this.player.isOnline() && 
-                        this.player.getOpenInventory().getTopInventory().equals(e.getInventory())) {
-                        this.player.closeInventory();
-                    }
-                });
             } else {
                 // Only close input if the opened inventory is NOT a GUI inventory
                 // (i.e., player opened a chest or other inventory manually)

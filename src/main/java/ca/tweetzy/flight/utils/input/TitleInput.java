@@ -56,6 +56,10 @@ public abstract class TitleInput extends Input {
 
     public boolean onInput(String text) {
         if (this.onResult(text)) {
+            // Allow next GUI to open when input completes successfully
+            // This prevents the brief flash when transitioning to a new GUI
+            // The flag is checked in Input.onInventoryOpen()
+            this.allowNextGuiOpen = true;
             this.close(true);
         }
         return true;

@@ -442,12 +442,17 @@ public class Gui {
             return;
         }
         
-        // Set transition flag before showing new GUI
-        // This prevents setOnClose from running during transition
+        // CRITICAL: Set transition flags BEFORE showing new GUI
+        // This ensures that:
+        // 1. setOnClose handlers won't run during transition
+        // 2. Any clicks that arrive during transition will see the flags set
+        // 3. The GUI is marked as transitioning before session lock is updated
         this.isTransitioning = true;
         this.allowClose = true;
+        this.open = false; // Mark as closed to prevent further interactions
         
         // Show the new GUI - it will replace this one
+        // The showGUI method will handle updating the session lock atomically
         manager.showGUI(player, newGui);
     }
 

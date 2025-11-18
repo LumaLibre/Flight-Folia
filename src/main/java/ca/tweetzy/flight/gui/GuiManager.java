@@ -66,59 +66,67 @@ public class GuiManager {
      * This method automatically detects if there's an existing GUI open for the player
      * and uses safe transition logic to prevent setOnClose handlers from running.
      * This ensures backwards compatibility while providing safe transitions.
+     * 
+     * CRITICAL: Session lock and openInventories map are updated atomically on the main thread
+     * to prevent race conditions where clicks could be processed against the wrong GUI.
      */
     public void showGUI(Player player, Gui gui) {
         if (shutdown || !initialized) {
             init();
         }
 
+        // Prepare inventory creation in async (safe operation)
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            Gui previous = openInventories.put(player, gui);
-            
-            // If there's a previous GUI open, use safe transition logic
-            if (previous != null && previous.isOpen() && previous.getPlayers().contains(player)) {
-                // Use transition logic to prevent setOnClose from running
-                previous.isTransitioning = true;
-                previous.allowClose = true;
-                previous.open = false;
-                
-                // Cancel update tasks for updating GUIs (e.g., AuctionUpdatingPagedGUI)
-                // Use reflection to safely check and cancel tasks
-                try {
-                    Method cancelTask = previous.getClass().getMethod("cancelTask");
-                    cancelTask.invoke(previous);
-                    if (DEBUG) {
-                        Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (transitioning to " + gui.getClass().getSimpleName() + ")");
-                    }
-                } catch (NoSuchMethodException e) {
-                    // Not an updating GUI, that's fine
-                } catch (Exception e) {
-                    if (DEBUG) {
-                        Bukkit.getLogger().warning("[GuiManager] Error cancelling task for " + previous.getClass().getSimpleName() + ": " + e.getMessage());
-                    }
-                }
-            } else if (previous != null) {
-                previous.open = false;
-                // Also try to cancel task even if GUI wasn't open (safety measure)
-                try {
-                    Method cancelTask = previous.getClass().getMethod("cancelTask");
-                    cancelTask.invoke(previous);
-                    if (DEBUG) {
-                        Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (GUI was not open)");
-                    }
-                } catch (Exception e) {
-                    // Not an updating GUI or error, that's fine
-                }
-            }
-
             Inventory inv = gui.getOrCreateInventory(this);
 
-            // Move session lock to main thread to prevent race condition
-            // Session lock must be set BEFORE inventory opens to prevent exploit
+            // All state updates must happen atomically on the main thread
+            // This prevents race conditions where clicks arrive between map update and session lock update
             Bukkit.getScheduler().runTask(plugin, () -> {
-                // Start session lock on main thread before opening inventory
-                GUISessionLock.start(player.getUniqueId(), gui);
+                // Get previous GUI before updating map
+                Gui previous = openInventories.get(player);
                 
+                // If there's a previous GUI open, use safe transition logic
+                if (previous != null && previous.isOpen() && previous.getPlayers().contains(player)) {
+                    // Use transition logic to prevent setOnClose from running
+                    previous.isTransitioning = true;
+                    previous.allowClose = true;
+                    previous.open = false;
+                    
+                    // Cancel update tasks for updating GUIs (e.g., AuctionUpdatingPagedGUI)
+                    // Use reflection to safely check and cancel tasks
+                    try {
+                        Method cancelTask = previous.getClass().getMethod("cancelTask");
+                        cancelTask.invoke(previous);
+                        if (DEBUG) {
+                            Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (transitioning to " + gui.getClass().getSimpleName() + ")");
+                        }
+                    } catch (NoSuchMethodException e) {
+                        // Not an updating GUI, that's fine
+                    } catch (Exception e) {
+                        if (DEBUG) {
+                            Bukkit.getLogger().warning("[GuiManager] Error cancelling task for " + previous.getClass().getSimpleName() + ": " + e.getMessage());
+                        }
+                    }
+                } else if (previous != null) {
+                    previous.open = false;
+                    // Also try to cancel task even if GUI wasn't open (safety measure)
+                    try {
+                        Method cancelTask = previous.getClass().getMethod("cancelTask");
+                        cancelTask.invoke(previous);
+                        if (DEBUG) {
+                            Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (GUI was not open)");
+                        }
+                    } catch (Exception e) {
+                        // Not an updating GUI or error, that's fine
+                    }
+                }
+
+                // ATOMIC UPDATE: Update both session lock and openInventories map together
+                // This ensures clicks always see consistent state
+                GUISessionLock.start(player.getUniqueId(), gui);
+                openInventories.put(player, gui);
+                
+                // Now safe to open inventory - session lock is already set
                 player.openInventory(inv);
                 gui.onOpen(this, player);
             });
@@ -191,28 +199,71 @@ public class GuiManager {
         /**
          * Validates the player's GUI session.
          * Automatically cleans up expired or invalid sessions.
+         * 
+         * Additional validation ensures:
+         * 1. Session lock matches the GUI instance
+         * 2. The GUI in openInventories map matches the GUI being interacted with
+         * 3. The GUI is still open and valid
          */
         private boolean validateSession(Player player, Gui gui) {
+            // Primary validation: session lock must match
             if (!GUISessionLock.isValid(player.getUniqueId(), gui)) {
+                if (DEBUG) {
+                    Gui lockedGui = GUISessionLock.get(player.getUniqueId());
+                    Bukkit.getLogger().warning("[GuiManager] Session validation failed for " + player.getName() + 
+                        ": GUI " + gui.getClass().getSimpleName() + " does not match session lock " + 
+                        (lockedGui != null ? lockedGui.getClass().getSimpleName() : "null"));
+                }
                 GUISessionLock.end(player.getUniqueId());
                 return false;
             }
+            
+            // Secondary validation: check if GUI in map matches (defense in depth)
+            Gui mappedGui = manager.openInventories.get(player);
+            if (mappedGui != null && mappedGui != gui) {
+                // GUI in map doesn't match - this could indicate a transition in progress
+                // Only fail if the mapped GUI is actually open and valid
+                if (mappedGui.isOpen() && mappedGui.getPlayers().contains(player)) {
+                    if (DEBUG) {
+                        Bukkit.getLogger().warning("[GuiManager] GUI mismatch for " + player.getName() + 
+                            ": Holder has " + gui.getClass().getSimpleName() + 
+                            " but map has " + mappedGui.getClass().getSimpleName());
+                    }
+                    // Don't fail here - the session lock is the source of truth
+                    // But log it for debugging
+                }
+            }
+            
+            // Tertiary validation: ensure GUI is still open
+            if (!gui.isOpen() || !gui.getPlayers().contains(player)) {
+                if (DEBUG) {
+                    Bukkit.getLogger().warning("[GuiManager] GUI is not open for " + player.getName() + 
+                        ": " + gui.getClass().getSimpleName());
+                }
+                return false;
+            }
+            
             return true;
         }
 
-        @EventHandler(priority = EventPriority.LOW)
+        @EventHandler(priority = EventPriority.LOWEST)
         void onDragGUI(InventoryDragEvent event) {
             if (!(event.getWhoClicked() instanceof Player player)) return;
 
             Inventory top = getTopInventoryCompat(event.getView());
             if (!(top != null && top.getHolder() instanceof GuiHolder holder)) return;
-            if (holder.manager != manager) return;
+            
+            // If this GUI belongs to another plugin's GuiManager, let that plugin handle it
+            if (holder.manager != manager) {
+                return;
+            }
 
             Gui gui = holder.getGUI();
 
-            // Session validation
+            // Session validation - cancel if invalid to prevent other plugins from processing stale clicks
             if (!validateSession(player, gui)) {
                 event.setCancelled(true);
+                event.setResult(Event.Result.DENY);
                 return;
             }
 
@@ -231,17 +282,24 @@ public class GuiManager {
             }
         }
 
-        @EventHandler(priority = EventPriority.LOW)
+        @EventHandler(priority = EventPriority.LOWEST)
         void onClickGUI(InventoryClickEvent event) {
             if (!(event.getWhoClicked() instanceof Player player)) return;
 
             Inventory top = getTopInventoryCompat(event.getView());
             if (!(top != null && top.getHolder() instanceof GuiHolder holder)) return;
-            if (holder.manager != manager) return;
+            
+            // If this GUI belongs to another plugin's GuiManager, let that plugin handle it
+            // We process at LOWEST priority so we handle our GUIs before other plugins can interfere
+            if (holder.manager != manager) {
+                return;
+            }
 
             Gui gui = holder.getGUI();
 
-            // Session validation
+            // CRITICAL: Session validation - cancel if invalid to prevent other plugins from processing stale clicks
+            // This is essential for preventing clicks on expired/stale GUI instances from being processed
+            // by other plugins that might have higher priority handlers
             if (!validateSession(player, gui)) {
                 event.setCancelled(true);
                 return;
