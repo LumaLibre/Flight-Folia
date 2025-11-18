@@ -19,9 +19,11 @@
 package ca.tweetzy.flight.database;
 
 import ca.tweetzy.flight.database.query.QueryBuilder;
+import ca.tweetzy.flight.database.repository.AnnotatedEntityMapper;
 import ca.tweetzy.flight.database.repository.BaseRepository;
 import ca.tweetzy.flight.database.repository.EntityMapper;
 import ca.tweetzy.flight.database.repository.Repository;
+import ca.tweetzy.flight.database.schema.SchemaManager;
 import ca.tweetzy.flight.database.sync.DatabaseEvent;
 import ca.tweetzy.flight.database.sync.DatabaseEventListener;
 import ca.tweetzy.flight.database.sync.RedisSyncManager;
@@ -53,6 +55,7 @@ public class DataManagerAbstract {
     
     private QueryBuilder queryBuilder;
     private RedisSyncManager redisSyncManager;
+    private SchemaManager schemaManager;
     private final Map<Class<?>, Repository<?, ?>> repositories = new ConcurrentHashMap<>();
 
     @Deprecated
@@ -247,6 +250,59 @@ public class DataManagerAbstract {
         return (Repository<T, ID>) repositories.computeIfAbsent(entityClass, k -> 
             new BaseRepository<>(databaseConnector, getTablePrefix(), tableName, mapper)
         );
+    }
+    
+    /**
+     * Get or create a repository for an annotated entity class
+     * Automatically initializes schema and creates AnnotatedEntityMapper
+     * 
+     * @param entityClass The annotated entity class
+     * @param pluginVersion The current plugin version (e.g., "2.0.0")
+     * @return The repository instance
+     */
+    @NotNull
+    @SuppressWarnings("unchecked")
+    public <T, ID> Repository<T, ID> getRepository(@NotNull Class<T> entityClass, @NotNull String pluginVersion) {
+        // Initialize schema if not already done
+        if (schemaManager == null) {
+            schemaManager = new SchemaManager(databaseConnector, getTablePrefix(), plugin);
+        }
+        
+        // Initialize table schema
+        schemaManager.initializeTable(entityClass, pluginVersion);
+        
+        // Create annotated mapper
+        AnnotatedEntityMapper<T> mapper = new AnnotatedEntityMapper<>(entityClass);
+        
+        // Get table name from annotation
+        ca.tweetzy.flight.database.annotations.Table tableAnnotation = 
+            entityClass.getAnnotation(ca.tweetzy.flight.database.annotations.Table.class);
+        if (tableAnnotation == null) {
+            throw new IllegalArgumentException("Entity class " + entityClass.getName() + " must be annotated with @Table");
+        }
+        String tableName = tableAnnotation.value();
+        
+        return (Repository<T, ID>) repositories.computeIfAbsent(entityClass, k -> 
+            new BaseRepository<>(databaseConnector, getTablePrefix(), tableName, mapper)
+        );
+    }
+    
+    /**
+     * Get the schema manager
+     */
+    @Nullable
+    public SchemaManager getSchemaManager() {
+        return schemaManager;
+    }
+    
+    /**
+     * Initialize schema for an entity class manually
+     */
+    public void initializeSchema(@NotNull Class<?> entityClass, @NotNull String pluginVersion) {
+        if (schemaManager == null) {
+            schemaManager = new SchemaManager(databaseConnector, getTablePrefix(), plugin);
+        }
+        schemaManager.initializeTable(entityClass, pluginVersion);
     }
     
     /**
