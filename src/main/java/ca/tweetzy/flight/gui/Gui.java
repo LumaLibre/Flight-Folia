@@ -33,6 +33,15 @@ import ca.tweetzy.flight.gui.methods.Delayable;
 import ca.tweetzy.flight.gui.methods.Droppable;
 import ca.tweetzy.flight.gui.methods.Openable;
 import ca.tweetzy.flight.gui.methods.Pagable;
+import ca.tweetzy.flight.gui.config.GuiConfig;
+import ca.tweetzy.flight.gui.config.GuiConfigButton;
+import ca.tweetzy.flight.gui.config.GuiConfigContext;
+import ca.tweetzy.flight.gui.config.GuiConfigDynamicRenderer;
+import ca.tweetzy.flight.gui.config.GuiConfigExpressionEngine;
+import ca.tweetzy.flight.gui.config.GuiConfigItemParser;
+import ca.tweetzy.flight.gui.config.GuiConfigLoader;
+import ca.tweetzy.flight.gui.config.GuiConfigSlotHelper;
+import ca.tweetzy.flight.gui.config.action.GuiConfigActionRegistry;
 import ca.tweetzy.flight.utils.Common;
 import ca.tweetzy.flight.utils.QuickItem;
 import ca.tweetzy.flight.utils.input.InputSessionLock;
@@ -44,6 +53,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -111,6 +121,11 @@ public class Gui {
 
     protected boolean open = false;
     protected GuiManager guiManager;
+
+    // Config support (optional)
+    protected GuiConfig guiConfig;
+    protected GuiConfigContext configContext;
+    protected GuiConfigLoader configLoader;
 
     // Constructors
     public Gui() {
@@ -860,6 +875,21 @@ public class Gui {
         open = true;
         guiManager = manager;
         
+        // Initialize config context if config is loaded
+        initConfigContext(player);
+        
+        // Re-apply config buttons now that context is initialized
+        if (guiConfig != null && configContext != null) {
+            for (GuiConfigButton button : guiConfig.getButtons().values()) {
+                if (button.isEnabled()) {
+                    applyButton(button);
+                }
+            }
+            
+            // Render dynamic content
+            GuiConfigDynamicRenderer.renderDynamicContent(this, guiConfig, configContext);
+        }
+        
         // Reset transition flag when opening (in case of edge cases)
         isTransitioning = false;
         
@@ -956,5 +986,195 @@ public class Gui {
 
     protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable clicker) {
         conditionalButtons.computeIfAbsent(cell, k -> new HashMap<>()).put(type, clicker);
+    }
+
+    // --------------------------------------
+    // Config Support (Optional)
+    // --------------------------------------
+
+    /**
+     * Set the config loader for this GUI.
+     * Must be called before loadFromConfig().
+     */
+    @NotNull
+    public Gui setConfigLoader(@Nullable GuiConfigLoader loader) {
+        this.configLoader = loader;
+        return this;
+    }
+
+    /**
+     * Load configuration from a config file.
+     * This is an optional feature - GUIs can still be configured programmatically.
+     * 
+     * @param configName The name of the config file (without .yml extension)
+     * @return true if config was loaded successfully, false otherwise
+     */
+    public boolean loadFromConfig(@NotNull String configName) {
+        if (configLoader == null) {
+            // Try to get loader from GuiManager's plugin
+            if (guiManager != null && guiManager.getPlugin() != null) {
+                configLoader = new GuiConfigLoader((Plugin) guiManager.getPlugin());
+            } else {
+                return false;
+            }
+        }
+
+        guiConfig = configLoader.loadConfig(configName);
+        if (guiConfig == null) {
+            return false;
+        }
+
+        // Apply config settings
+        applyConfig();
+        return true;
+    }
+
+    /**
+     * Apply the loaded config to this GUI.
+     */
+    protected void applyConfig() {
+        if (guiConfig == null) {
+            return;
+        }
+
+        // Apply title
+        if (guiConfig.getTitle() != null) {
+            setTitle(guiConfig.getTitle());
+        }
+
+        // Apply rows
+        if (guiConfig.getRows() > 0) {
+            setRows(guiConfig.getRows());
+        }
+
+        // Apply type
+        if (guiConfig.getType() != null) {
+            this.inventoryType = guiConfig.getType();
+        }
+
+        // Apply background
+        if (guiConfig.getBackground() != null && guiConfig.getBackground().isEnabled()) {
+            applyBackground(guiConfig.getBackground());
+        }
+
+        // Apply buttons
+        for (GuiConfigButton button : guiConfig.getButtons().values()) {
+            if (button.isEnabled()) {
+                applyButton(button);
+            }
+        }
+
+        // Dynamic content will be rendered when context is initialized (in onOpen)
+    }
+
+    /**
+     * Apply background from config.
+     */
+    protected void applyBackground(@NotNull GuiConfig.GuiConfigBackground background) {
+        if (background.getMaterial() != null) {
+            CompMaterial material = CompMaterial.matchCompMaterial(background.getMaterial()).orElse(CompMaterial.BLACK_STAINED_GLASS_PANE);
+            ItemStack bgItem = QuickItem.of(material).name(background.getName() != null ? background.getName() : " ").make();
+            setDefaultItem(bgItem);
+        }
+
+        // Apply to specific slots if specified
+        if (background.getSlots() != null && !background.getSlots().isEmpty()) {
+            List<Integer> slots = GuiConfigSlotHelper.parseSlots(background.getSlots());
+            ItemStack bgItem = getDefaultItem();
+            for (int slot : slots) {
+                setItem(slot, bgItem);
+            }
+        }
+    }
+
+    /**
+     * Apply a button from config.
+     */
+    protected void applyButton(@NotNull GuiConfigButton button) {
+        if (configContext == null) {
+            // Can't apply buttons without context (need player)
+            return;
+        }
+
+        // Check condition
+        if (button.getCondition() != null) {
+            if (!GuiConfigExpressionEngine.evaluateBoolean(button.getCondition(), configContext)) {
+                return; // Condition not met, skip button
+            }
+        }
+
+        // Parse item
+        ItemStack item = GuiConfigItemParser.parseItem(button, configContext);
+
+        // Apply to slots
+        for (int slot : button.getSlots()) {
+            if (button.getAction() != null && !button.getAction().isEmpty()) {
+                // Set as button with action
+                if (button.getClickTypes().isEmpty()) {
+                    // No specific click types, apply to all
+                    setButton(slot, item, click -> {
+                        GuiConfigActionRegistry.executeAction(
+                            click, configContext, button.getAction()
+                        );
+                    });
+                } else {
+                    // Apply to specific click types
+                    for (ClickType clickType : button.getClickTypes()) {
+                        setButton(slot, item, clickType, click -> {
+                            GuiConfigActionRegistry.executeAction(
+                                click, configContext, button.getAction()
+                            );
+                        });
+                    }
+                }
+            } else {
+                // Just set as item (no action)
+                setItem(slot, item);
+            }
+        }
+    }
+
+    /**
+     * Set a context variable for use in config expressions.
+     * 
+     * @param key The variable key
+     * @param value The variable value
+     */
+    public void setConfigContext(@NotNull String key, @Nullable Object value) {
+        if (configContext == null) {
+            // Need to initialize context - but we need a player
+            // This will be set when GUI is opened or when player is available
+            return;
+        }
+        configContext.setVariable(key, value);
+    }
+
+    /**
+     * Initialize config context with a player.
+     * Called automatically when GUI is opened if config is loaded.
+     */
+    protected void initConfigContext(@NotNull Player player) {
+        if (guiConfig != null) {
+            configContext = new GuiConfigContext(player, this);
+            
+            // Set variables from config
+            for (Map.Entry<String, String> entry : guiConfig.getVariables().entrySet()) {
+                String varName = entry.getKey();
+                String varExpression = entry.getValue();
+                // Resolve expression to get actual value
+                String resolved = GuiConfigExpressionEngine.resolveVariables(varExpression, configContext);
+                configContext.setVariable(varName, resolved);
+            }
+        }
+    }
+
+    /**
+     * Get the GUI config context.
+     * 
+     * @return The context, or null if not initialized
+     */
+    @Nullable
+    public GuiConfigContext getConfigContext() {
+        return configContext;
     }
 }
