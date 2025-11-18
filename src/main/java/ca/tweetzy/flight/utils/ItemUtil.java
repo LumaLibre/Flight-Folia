@@ -21,10 +21,13 @@ package ca.tweetzy.flight.utils;
 import com.cryptomorin.xseries.XEnchantment;
 import lombok.NonNull;
 import lombok.experimental.UtilityClass;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @UtilityClass
 public final class ItemUtil {
@@ -38,7 +41,7 @@ public final class ItemUtil {
      */
     public String getItemName(@NonNull final ItemStack itemStack) {
         if (itemStack.hasItemMeta()) {
-            org.bukkit.inventory.meta.ItemMeta meta = itemStack.getItemMeta();
+            ItemMeta meta = itemStack.getItemMeta();
             if (meta != null && meta.hasDisplayName()) {
                 return meta.getDisplayName();
             }
@@ -57,7 +60,7 @@ public final class ItemUtil {
         if (!stack.hasItemMeta()) {
             return new ArrayList<>();
         }
-        org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
+        ItemMeta meta = stack.getItemMeta();
         if (meta != null && meta.hasLore()) {
             List<String> existingLore = meta.getLore();
             if (existingLore != null) {
@@ -75,11 +78,11 @@ public final class ItemUtil {
      * @return A list of enchants as strings
      */
     public List<String> getItemEnchantments(@NonNull final ItemStack stack) {
-        org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
+        ItemMeta meta = stack.getItemMeta();
         if (meta == null || !meta.hasEnchants()) {
             return new ArrayList<>();
         }
-        java.util.Map<org.bukkit.enchantments.Enchantment, Integer> enchants = meta.getEnchants();
+        Map<Enchantment, Integer> enchants = meta.getEnchants();
         if (enchants.isEmpty()) {
             return new ArrayList<>();
         }

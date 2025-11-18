@@ -28,6 +28,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -214,7 +215,7 @@ public class SelectQuery extends Query {
     /**
      * Fetch all results as ResultSet (for custom processing)
      */
-    public void fetchResultSet(@NotNull java.util.function.Consumer<ResultSet> consumer) {
+    public void fetchResultSet(@NotNull Consumer<ResultSet> consumer) {
         connector.connect(connection -> {
             String sql = buildSQL();
             

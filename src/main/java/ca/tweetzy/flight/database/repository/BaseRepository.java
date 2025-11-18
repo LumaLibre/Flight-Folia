@@ -22,10 +22,13 @@ import ca.tweetzy.flight.database.Callback;
 import ca.tweetzy.flight.database.DatabaseConnector;
 import ca.tweetzy.flight.database.MySQLConnector;
 import ca.tweetzy.flight.database.SQLiteConnector;
+import ca.tweetzy.flight.database.query.DeleteQuery;
 import ca.tweetzy.flight.database.query.QueryBuilder;
+import ca.tweetzy.flight.database.query.SelectQuery;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
@@ -108,7 +111,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                     updateSql += String.join(", ", setClauses);
                     updateSql += " WHERE " + idColumn + " = ?";
                     
-                    try (java.sql.PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
+                    try (PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
                         int paramIndex = 1;
                         for (String column : columns) {
                             if (!column.equals(idColumn)) {
@@ -133,7 +136,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                           String.join(", ", placeholders) + ")";
                 }
                 
-                try (java.sql.PreparedStatement stmt = connection.prepareStatement(sql)) {
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                     int paramIndex = 1;
                     for (String column : columns) {
                         setParameter(stmt, paramIndex++, values.get(column));
@@ -182,7 +185,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                     updateSql += String.join(", ", setClauses);
                     updateSql += " WHERE " + mapper.getIdColumn() + " = ?";
                     
-                    try (java.sql.PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
+                    try (PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
                         int paramIndex = 1;
                         for (Object value : values.values()) {
                             setParameter(updateStmt, paramIndex++, value);
@@ -201,7 +204,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                             }
                             insertSql += String.join(", ", placeholders) + ")";
                             
-                            try (java.sql.PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
+                            try (PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
                                 paramIndex = 1;
                                 for (Object value : values.values()) {
                                     setParameter(insertStmt, paramIndex++, value);
@@ -224,13 +227,13 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                 lastException = ex;
                 try {
                     connection.rollback();
-                } catch (java.sql.SQLException rollbackEx) {
+                } catch (SQLException rollbackEx) {
                     rollbackEx.printStackTrace();
                 }
             } finally {
                 try {
                     connection.setAutoCommit(true);
-                } catch (java.sql.SQLException ex) {
+                } catch (SQLException ex) {
                     ex.printStackTrace();
                 }
             }
@@ -243,12 +246,12 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
     
     @Override
     public void findById(@NotNull ID id, @NotNull Callback<T> callback) {
-        ca.tweetzy.flight.database.query.SelectQuery selectQuery = queryBuilder.select(tableName)
+        SelectQuery selectQuery = queryBuilder.select(tableName)
             .where(mapper.getIdColumn(), id);
         selectQuery.fetchFirst(rs -> {
             try {
                 return mapper.map(rs);
-            } catch (java.sql.SQLException ex) {
+            } catch (SQLException ex) {
                 throw new RuntimeException(ex);
             }
         }, callback);
@@ -260,7 +263,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
             .fetch(rs -> {
                 try {
                     return mapper.map(rs);
-                } catch (java.sql.SQLException ex) {
+                } catch (SQLException ex) {
                     throw new RuntimeException(ex);
                 }
             }, callback);
@@ -268,7 +271,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
     
     @Override
     public void deleteById(@NotNull ID id, @Nullable Callback<Boolean> callback) {
-        ca.tweetzy.flight.database.query.DeleteQuery deleteQuery = queryBuilder.delete(tableName)
+        DeleteQuery deleteQuery = queryBuilder.delete(tableName)
             .where(mapper.getIdColumn(), id);
         deleteQuery.execute((ex, affectedRows) -> {
             if (callback != null) {
@@ -301,7 +304,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                 connection.setAutoCommit(false);
                 String sql = "DELETE FROM " + tablePrefix + tableName + " WHERE " + mapper.getIdColumn() + " = ?";
                 
-                try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
                     for (T entity : entities) {
                         Object id = mapper.getId(entity);
                         setParameter(statement, 1, id);
@@ -323,13 +326,13 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                 lastException = ex;
                 try {
                     connection.rollback();
-                } catch (java.sql.SQLException rollbackEx) {
+                } catch (SQLException rollbackEx) {
                     rollbackEx.printStackTrace();
                 }
             } finally {
                 try {
                     connection.setAutoCommit(true);
-                } catch (java.sql.SQLException ex) {
+                } catch (SQLException ex) {
                     ex.printStackTrace();
                 }
             }
@@ -342,7 +345,7 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
     
     @Override
     public void existsById(@NotNull ID id, @NotNull Callback<Boolean> callback) {
-        ca.tweetzy.flight.database.query.SelectQuery selectQuery = queryBuilder.select(tableName)
+        SelectQuery selectQuery = queryBuilder.select(tableName)
             .columns(mapper.getIdColumn())
             .where(mapper.getIdColumn(), id);
         selectQuery.fetchFirst(rs -> {
@@ -368,13 +371,13 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
                         return rs.getLong("count");
                     }
                     return 0L;
-                } catch (java.sql.SQLException ex) {
+                } catch (SQLException ex) {
                     throw new RuntimeException(ex);
                 }
             }, callback);
     }
     
-    private void setParameter(java.sql.PreparedStatement statement, int index, Object value) throws java.sql.SQLException {
+    private void setParameter(PreparedStatement statement, int index, Object value) throws SQLException {
         if (value == null) {
             statement.setNull(index, java.sql.Types.NULL);
         } else if (value instanceof String) {

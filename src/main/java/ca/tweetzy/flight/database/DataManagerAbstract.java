@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.database;
 
+import ca.tweetzy.flight.database.annotations.Table;
 import ca.tweetzy.flight.database.query.QueryBuilder;
 import ca.tweetzy.flight.database.repository.AnnotatedEntityMapper;
 import ca.tweetzy.flight.database.repository.BaseRepository;
@@ -275,8 +276,8 @@ public class DataManagerAbstract {
         AnnotatedEntityMapper<T> mapper = new AnnotatedEntityMapper<>(entityClass);
         
         // Get table name from annotation
-        ca.tweetzy.flight.database.annotations.Table tableAnnotation = 
-            entityClass.getAnnotation(ca.tweetzy.flight.database.annotations.Table.class);
+        Table tableAnnotation = 
+            entityClass.getAnnotation(Table.class);
         if (tableAnnotation == null) {
             throw new IllegalArgumentException("Entity class " + entityClass.getName() + " must be annotated with @Table");
         }

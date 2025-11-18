@@ -31,6 +31,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -204,7 +205,7 @@ public final class GuiConfigItemParser {
     private static String getTranslationsValue(@NonNull String path, @NonNull Player player) {
         try {
             // Use reflection to access private translationFiles map
-            java.lang.reflect.Field translationFilesField = 
+            Field translationFilesField = 
                 FlightTranslator.class.getDeclaredField("translationFiles");
             translationFilesField.setAccessible(true);
             @SuppressWarnings("unchecked")
@@ -212,7 +213,7 @@ public final class GuiConfigItemParser {
                 (Map<String, TranslationFile>) translationFilesField.get(null);
             
             // Get main language
-            java.lang.reflect.Field mainLanguageField = 
+            Field mainLanguageField = 
                 FlightTranslator.class.getDeclaredField("mainLanguage");
             mainLanguageField.setAccessible(true);
             String mainLanguage = (String) mainLanguageField.get(null);
@@ -252,7 +253,7 @@ public final class GuiConfigItemParser {
     public static List<String> getTranslationsList(@NonNull String path, @NonNull Player player) {
         try {
             // Use reflection to access private translationFiles map
-            java.lang.reflect.Field translationFilesField = 
+            Field translationFilesField = 
                 FlightTranslator.class.getDeclaredField("translationFiles");
             translationFilesField.setAccessible(true);
             @SuppressWarnings("unchecked")
@@ -260,7 +261,7 @@ public final class GuiConfigItemParser {
                 (Map<String, TranslationFile>) translationFilesField.get(null);
             
             // Get main language
-            java.lang.reflect.Field mainLanguageField = 
+            Field mainLanguageField = 
                 FlightTranslator.class.getDeclaredField("mainLanguage");
             mainLanguageField.setAccessible(true);
             String mainLanguage = (String) mainLanguageField.get(null);

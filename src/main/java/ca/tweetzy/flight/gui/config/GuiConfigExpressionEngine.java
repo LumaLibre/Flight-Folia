@@ -21,6 +21,11 @@ package ca.tweetzy.flight.gui.config;
 import lombok.NonNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Safe expression evaluation engine for GUI configs.
  * Supports variables, placeholders, boolean logic, and basic math operations.
@@ -28,7 +33,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class GuiConfigExpressionEngine {
 
-    private static final java.util.regex.Pattern VARIABLE_PATTERN = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}");
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
     
     /**
      * Evaluate a boolean expression.
@@ -68,7 +73,7 @@ public final class GuiConfigExpressionEngine {
         String result = input;
         
         // Replace ${variable} patterns
-        java.util.regex.Matcher matcher = VARIABLE_PATTERN.matcher(result);
+        Matcher matcher = VARIABLE_PATTERN.matcher(result);
         while (matcher.find()) {
             String varName = matcher.group(1);
             Object value = getVariableValue(varName, context);
@@ -110,18 +115,18 @@ public final class GuiConfigExpressionEngine {
             // Try getter method first
             String getterName = "get" + capitalize(property);
             try {
-                java.lang.reflect.Method method = obj.getClass().getMethod(getterName);
+                Method method = obj.getClass().getMethod(getterName);
                 return method.invoke(obj);
             } catch (NoSuchMethodException e) {
                 // Try boolean getter
                 getterName = "is" + capitalize(property);
                 try {
-                    java.lang.reflect.Method method = obj.getClass().getMethod(getterName);
+                    Method method = obj.getClass().getMethod(getterName);
                     return method.invoke(obj);
                 } catch (NoSuchMethodException e2) {
                     // Try field access
                     try {
-                        java.lang.reflect.Field field = obj.getClass().getField(property);
+                        Field field = obj.getClass().getField(property);
                         return field.get(obj);
                     } catch (NoSuchFieldException e3) {
                         return null;

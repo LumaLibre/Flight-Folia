@@ -85,7 +85,7 @@ public class GuiManager {
                 // Cancel update tasks for updating GUIs (e.g., AuctionUpdatingPagedGUI)
                 // Use reflection to safely check and cancel tasks
                 try {
-                    java.lang.reflect.Method cancelTask = previous.getClass().getMethod("cancelTask");
+                    Method cancelTask = previous.getClass().getMethod("cancelTask");
                     cancelTask.invoke(previous);
                     if (DEBUG) {
                         Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (transitioning to " + gui.getClass().getSimpleName() + ")");
@@ -101,7 +101,7 @@ public class GuiManager {
                 previous.open = false;
                 // Also try to cancel task even if GUI wasn't open (safety measure)
                 try {
-                    java.lang.reflect.Method cancelTask = previous.getClass().getMethod("cancelTask");
+                    Method cancelTask = previous.getClass().getMethod("cancelTask");
                     cancelTask.invoke(previous);
                     if (DEBUG) {
                         Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + previous.getClass().getSimpleName() + " (GUI was not open)");
@@ -317,7 +317,7 @@ public class GuiManager {
 
             // Cancel update tasks for updating GUIs before closing
             try {
-                java.lang.reflect.Method cancelTask = gui.getClass().getMethod("cancelTask");
+                Method cancelTask = gui.getClass().getMethod("cancelTask");
                 cancelTask.invoke(gui);
                 if (DEBUG) {
                     Bukkit.getLogger().info("[GuiManager] Cancelled update task for " + gui.getClass().getSimpleName() + " (GUI closing, player: " + player.getName() + ")");

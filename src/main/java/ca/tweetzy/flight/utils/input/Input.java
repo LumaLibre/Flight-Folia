@@ -48,7 +48,7 @@ import org.bukkit.scheduler.BukkitTask;
 public abstract class Input implements Listener, Runnable {
 
     // Cache the reflection Method object for performance (lookup once, reuse many times)
-    private static java.lang.reflect.Method getGUIMethod = null;
+    private static Method getGUIMethod = null;
     private static final Object methodLock = new Object();
 
     private final Player player;

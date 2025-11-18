@@ -25,6 +25,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -168,7 +169,7 @@ public class DependencyLoader {
             Class<?> clazz = obj.getClass();
             while (clazz != null) {
                 try {
-                    java.lang.reflect.Field field = clazz.getDeclaredField(fieldName);
+                    Field field = clazz.getDeclaredField(fieldName);
                     field.setAccessible(true);
                     return field.get(obj);
                 } catch (NoSuchFieldException e) {

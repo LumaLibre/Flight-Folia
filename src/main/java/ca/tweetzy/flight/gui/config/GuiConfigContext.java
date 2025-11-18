@@ -24,6 +24,7 @@ import lombok.NonNull;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -99,8 +100,8 @@ public final class GuiConfigContext {
     public void updateGuiVariables() {
         // Access page/pages via reflection since they're protected
         try {
-            java.lang.reflect.Field pageField = gui.getClass().getDeclaredField("page");
-            java.lang.reflect.Field pagesField = gui.getClass().getDeclaredField("pages");
+            Field pageField = gui.getClass().getDeclaredField("page");
+            Field pagesField = gui.getClass().getDeclaredField("pages");
             pageField.setAccessible(true);
             pagesField.setAccessible(true);
             setVariable("page", pageField.getInt(gui));
