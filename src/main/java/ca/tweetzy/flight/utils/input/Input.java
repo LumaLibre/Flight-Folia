@@ -72,11 +72,14 @@ public abstract class Input implements Listener, Runnable {
         // Save reference to open GUI and ensure it allows closing
         this.savedGui = GUISessionLock.get(player.getUniqueId());
         if (this.savedGui != null) {
+            // Automatically set allowClose to prevent GUI from reopening during TitleInput
+            // This preserves close handlers (for item return) while preventing unwanted reopening
             this.savedGui.setAllowClose(true);
             // Preserve the session lock so GUI can reopen after input
             this.preserveSession = true;
         }
         
+        // Close inventory automatically - TitleInput handles this
         Bukkit.getServer().getScheduler().runTaskLater(plugin, player::closeInventory, 1L);
         this.task = Bukkit.getServer().getScheduler().runTaskTimer(plugin, this, 1L, 1L);
         Bukkit.getServer().getPluginManager().registerEvents(this, plugin);
@@ -207,6 +210,12 @@ public abstract class Input implements Listener, Runnable {
                 // Set allowClose on the GUI so it won't try to reopen itself
                 Gui gui = getGuiFromHolder(e.getInventory().getHolder());
                 if (gui != null) {
+                    // Allow GUI to open if it's marked as transitioning (e.g., confirmation GUI)
+                    // This allows safe transitions from TitleInput to other GUIs
+                    if (gui.isTransitioning()) {
+                        // This is an intentional transition, allow it
+                        return;
+                    }
                     gui.setAllowClose(true);
                 } else if (this.savedGui != null) {
                     // Fallback to saved GUI if reflection fails
@@ -240,30 +249,63 @@ public abstract class Input implements Listener, Runnable {
         if (this.closed) return; // Prevent double-closing
         this.closed = true;
         
-        // Unregister this input as active
-        InputSessionLock.end(this.player.getUniqueId());
+        // Security: Always unregister input session, even if something goes wrong
+        try {
+            // Unregister this input as active
+            InputSessionLock.end(this.player.getUniqueId());
+        } catch (Exception e) {
+            // Log but continue cleanup
+            Bukkit.getLogger().warning("Error ending input session: " + e.getMessage());
+        }
         
-        HandlerList.unregisterAll(this);
-        this.task.cancel();
+        try {
+            HandlerList.unregisterAll(this);
+        } catch (Exception e) {
+            // Already unregistered or error, continue
+        }
+        
+        try {
+            this.task.cancel();
+        } catch (Exception e) {
+            // Task already cancelled or error, continue
+        }
         
         // Clear the preserve session flag when closing
         this.preserveSession = false;
         
         if (!completed) {
-            // Mark that we're exiting to prevent InventoryOpenEvent from interfering
-            this.exiting = true;
-            // Delay onExit slightly to ensure input is fully closed and handlers unregistered before GUI reopens
-            Bukkit.getScheduler().runTaskLater(
-                this.plugin,
-                () -> {
-                    this.onExit(this.player);
-                    this.exiting = false;
-                },
-                3L
-            );
+            // Security: Validate player is still online before calling onExit
+            if (this.player != null && this.player.isOnline()) {
+                // Mark that we're exiting to prevent InventoryOpenEvent from interfering
+                this.exiting = true;
+                // Delay onExit slightly to ensure input is fully closed and handlers unregistered before GUI reopens
+                Bukkit.getScheduler().runTaskLater(
+                    this.plugin,
+                    () -> {
+                        // Double-check player is still online before calling onExit
+                        if (this.player != null && this.player.isOnline()) {
+                            try {
+                                this.onExit(this.player);
+                            } catch (Exception e) {
+                                Bukkit.getLogger().warning("Error in Input onExit handler: " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                        this.exiting = false;
+                    },
+                    3L
+                );
+            }
         }
 
-        Titles.clearTitle(this.player);
-        ActionBar.clearActionBar(this.player);
+        // Clear title/actionbar safely
+        if (this.player != null && this.player.isOnline()) {
+            try {
+                Titles.clearTitle(this.player);
+                ActionBar.clearActionBar(this.player);
+            } catch (Exception e) {
+                // Player may have disconnected, ignore
+            }
+        }
     }
 }

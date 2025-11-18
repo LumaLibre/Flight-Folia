@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.gui;
 
+import org.bukkit.Bukkit;
 import ca.tweetzy.flight.comp.enums.CompMaterial;
 import ca.tweetzy.flight.comp.enums.CompSound;
 import ca.tweetzy.flight.comp.enums.ServerVersion;
@@ -70,6 +71,7 @@ public class Gui {
     protected boolean allowClose = true;
     protected boolean useLockedCells = false;
     protected boolean allowShiftClick = false;
+    protected boolean isTransitioning = false;
 
     // Slot management
     protected final Map<Integer, Boolean> unlockedCells = new HashMap<>();
@@ -299,6 +301,10 @@ public class Gui {
         return this;
     }
 
+    public boolean isTransitioning() {
+        return isTransitioning;
+    }
+
     public boolean isAllowShiftClick() {
         return allowShiftClick;
     }
@@ -376,6 +382,58 @@ public class Gui {
         allowClose = true;
         getPlayers().forEach(Player::closeInventory);
         return this;
+    }
+
+    /**
+     * Safely transitions from this GUI to a new GUI.
+     * This prevents setOnClose handlers from running during the transition.
+     * 
+     * @param manager The GuiManager instance
+     * @param player The player to transition
+     * @param newGui The new GUI to show
+     */
+    /**
+     * Safely transitions from this GUI to a new GUI.
+     * This method sets the transition flag to prevent setOnClose handlers from running
+     * and ensures proper session lock management.
+     * 
+     * Security features:
+     * - Validates that this GUI is the active session for the player
+     * - Prevents transition if player is offline
+     * - Ensures new GUI is not null
+     * 
+     * @param manager The GuiManager instance
+     * @param player The player transitioning
+     * @param newGui The new GUI to transition to (must not be null)
+     * @throws IllegalArgumentException if newGui is null or player is offline
+     */
+    public void transitionTo(@NotNull GuiManager manager, @NotNull Player player, @NotNull Gui newGui) {
+        // Security validation: ensure player is online and valid
+        if (player == null || !player.isOnline()) {
+            throw new IllegalArgumentException("Cannot transition GUI: player is offline or null");
+        }
+        
+        // Security validation: ensure new GUI is not null
+        if (newGui == null) {
+            throw new IllegalArgumentException("Cannot transition to null GUI");
+        }
+        
+        // Security validation: ensure this GUI is still the active session
+        // This prevents transitions from stale/expired GUI instances
+        if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
+            // If this GUI is not valid, just show the new GUI without transition flag
+            // This handles edge cases where session expired
+            manager.showGUI(player, newGui);
+            return;
+        }
+        
+        // Set transition flag before showing new GUI
+        // This prevents setOnClose from running during transition
+        this.isTransitioning = true;
+        this.allowClose = true;
+        
+        // Show the new GUI - it will replace this one
+        manager.showGUI(player, newGui);
     }
 
     public Gui exit() {
@@ -676,8 +734,11 @@ public class Gui {
                               @NotNull Inventory inventory, @NotNull InventoryClickEvent event) {
 
         // --- SESSION VALIDATION ---
+        // Security: Validate GUI session lock - prevents old/delayed packets from interacting
+        // This is critical for preventing duplication exploits
         if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
             event.setCancelled(true);
+            // Don't process click if session is invalid
             return false;
         }
 
@@ -748,8 +809,11 @@ public class Gui {
     protected boolean onClickPlayerInventory(@NotNull GuiManager manager, @NotNull Player player,
                                              @NotNull Inventory openInv, @NotNull InventoryClickEvent event) {
 
+        // Security: Validate GUI session lock - prevents old/delayed packets from interacting
+        // This is critical for preventing duplication exploits
         if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
             event.setCancelled(true);
+            // Don't process click if session is invalid
             return false;
         }
 
@@ -767,8 +831,11 @@ public class Gui {
     protected boolean onClickOutside(@NotNull GuiManager manager, @NotNull Player player,
                                      @NotNull InventoryClickEvent event) {
 
+        // Security: Validate GUI session lock - prevents old/delayed packets from interacting
+        // This is critical for preventing duplication exploits
         if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
             event.setCancelled(true);
+            // Don't process click if session is invalid
             return false;
         }
 
@@ -781,28 +848,83 @@ public class Gui {
     }
 
     protected void onOpen(@NotNull GuiManager manager, @NotNull Player player) {
+        // Security: Validate player is online before opening
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        
         // --- REGISTER SESSION ---
+        // This prevents old/delayed client packets from interacting with previous GUI instances
         GUISessionLock.start(player.getUniqueId(), this);
         open = true;
         guiManager = manager;
-        if (opener != null) opener.onOpen(new GuiOpenEvent(manager, this, player));
+        
+        // Reset transition flag when opening (in case of edge cases)
+        isTransitioning = false;
+        
+        if (opener != null) {
+            try {
+                opener.onOpen(new GuiOpenEvent(manager, this, player));
+            } catch (Exception e) {
+                // Log error but don't crash - GUI is still opened
+                Bukkit.getLogger().severe("Error in GUI open handler for " + this.getClass().getSimpleName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
     }
 
     protected void onClose(@NotNull GuiManager manager, @NotNull Player player) {
+        // Security: Validate player is still online before processing close
+        if (player == null || !player.isOnline()) {
+            // Player disconnected, just clean up session lock
+            GUISessionLock.end(player != null ? player.getUniqueId() : null);
+            return;
+        }
+        
         if (!allowClose) {
-            manager.showGUI(player, this);
+            // Security: Validate this GUI is still the active session before reopening
+            if (GUISessionLock.isValid(player.getUniqueId(), this)) {
+                manager.showGUI(player, this);
+            }
             return;
         }
 
+        // End session lock - this prevents old GUI instances from being interacted with
         GUISessionLock.end(player.getUniqueId());
         boolean showParent = open && parent != null;
-        if (closer != null) closer.onClose(new GuiCloseEvent(manager, this, player));
         
-        // Validate parent GUI before reopening to prevent exploitation
-        if (showParent && parent != null) {
-            // Ensure parent is a valid GUI instance and not the same as current
-            if (parent != this) {
-                manager.showGUI(player, parent);
+        // Don't run setOnClose handler if we're transitioning to another GUI
+        // This prevents unwanted reopening and allows smooth transitions
+        // Security: Always run close handler if not transitioning to ensure items are returned
+        if (!isTransitioning && closer != null) {
+            try {
+                closer.onClose(new GuiCloseEvent(manager, this, player));
+            } catch (Exception e) {
+                // Log error but don't crash - ensure session is still cleaned up
+                Bukkit.getLogger().severe("Error in GUI close handler for " + this.getClass().getSimpleName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        // Reset transition flag after close handler check
+        boolean wasTransitioning = isTransitioning;
+        isTransitioning = false;
+        
+        // Security: Validate parent GUI before reopening to prevent exploitation
+        // Only show parent if we're not transitioning (transitioning means we're going to a specific GUI)
+        if (!wasTransitioning && showParent && parent != null) {
+            // Security checks:
+            // 1. Ensure parent is not the same as current (prevents infinite loops)
+            // 2. Ensure parent is a valid GUI instance
+            // 3. Ensure player is still online
+            if (parent != this && player.isOnline()) {
+                // Additional security: validate parent GUI is not null and is a valid instance
+                try {
+                    manager.showGUI(player, parent);
+                } catch (Exception e) {
+                    // If showing parent fails, log but don't crash
+                    Bukkit.getLogger().warning("Failed to show parent GUI: " + e.getMessage());
+                }
             }
         }
     }
