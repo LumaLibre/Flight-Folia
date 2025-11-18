@@ -80,7 +80,7 @@ public class MaterialPickerGUI extends BaseGUI {
     protected void draw() {
         reset();
 
-        List<ItemStack> validMaterials = InventorySafeMaterials.get().stream().map(CompMaterial::parseItem).toList();
+        List<ItemStack> validMaterials = InventorySafeMaterials.get().stream().map(CompMaterial::parseItem).collect(Collectors.toList());
 
         // load in enchantments
         for (XEnchantment value : XEnchantment.values()) {

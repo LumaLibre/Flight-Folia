@@ -117,32 +117,8 @@ public class DependencyLoader {
      */
     private void addToClasspath(@NotNull ClassLoader classLoader, @NotNull URL url) {
         try {
-            // Try URLClassLoader method first (Java 8)
-            if (classLoader instanceof URLClassLoader) {
-                URLClassLoader urlClassLoader = (URLClassLoader) classLoader;
-                Method addURLMethod = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
-                addURLMethod.setAccessible(true);
-                addURLMethod.invoke(urlClassLoader, url);
-                return;
-            }
-            
-            // For Java 9+, use the Instrumentation API or reflection on the classloader
-            // Try to find and use the addURL method via reflection
-            try {
-                Method addURLMethod = classLoader.getClass().getDeclaredMethod("addURL", URL.class);
-                addURLMethod.setAccessible(true);
-                addURLMethod.invoke(classLoader, url);
-                return;
-            } catch (NoSuchMethodException ignored) {
-                // Method doesn't exist, try alternative approach
-            }
-            
-            // Alternative: Use Java 9+ ModuleLayer or Instrumentation
-            // For now, try to use the system property approach
-            String classPath = System.getProperty("java.class.path");
-            System.setProperty("java.class.path", classPath + File.pathSeparator + new File(url.toURI()).getAbsolutePath());
-            
-            // Also try to add via reflection to the ucp (UnnamedModuleClassLoader) in Java 9+
+            // For Java 9+, try the ucp (UnnamedModuleClassLoader) method first
+            // This is the preferred method for modern Java versions
             try {
                 Object ucp = getField(classLoader, "ucp");
                 if (ucp != null) {
@@ -151,11 +127,54 @@ public class DependencyLoader {
                     addURL.invoke(ucp, url);
                     return;
                 }
+            } catch (NoSuchMethodException | java.lang.reflect.InaccessibleObjectException ignored) {
+                // Method doesn't exist or inaccessible, try alternative approach
+            } catch (Exception e) {
+                // If it's not InaccessibleObjectException, it might be another issue, but continue to fallback
+                if (!(e instanceof java.lang.reflect.InaccessibleObjectException)) {
+                    // Log only if it's not the expected inaccessible exception
+                }
+            }
+            
+            // Try URLClassLoader method (Java 8 or if ucp method failed)
+            if (classLoader instanceof URLClassLoader) {
+                try {
+                    URLClassLoader urlClassLoader = (URLClassLoader) classLoader;
+                    Method addURLMethod = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
+                    addURLMethod.setAccessible(true);
+                    addURLMethod.invoke(urlClassLoader, url);
+                    return;
+                } catch (java.lang.reflect.InaccessibleObjectException ignored) {
+                    // Java 9+ module system restriction, try next method
+                } catch (NoSuchMethodException ignored) {
+                    // Method doesn't exist, try next method
+                }
+            }
+            
+            // For Java 9+, try to find and use the addURL method via reflection on the classloader itself
+            try {
+                Method addURLMethod = classLoader.getClass().getDeclaredMethod("addURL", URL.class);
+                addURLMethod.setAccessible(true);
+                addURLMethod.invoke(classLoader, url);
+                return;
+            } catch (NoSuchMethodException | java.lang.reflect.InaccessibleObjectException ignored) {
+                // Method doesn't exist or inaccessible, try alternative approach
+            }
+            
+            // Last resort: Try to use the system property approach (not ideal but might work)
+            try {
+                String classPath = System.getProperty("java.class.path");
+                System.setProperty("java.class.path", classPath + File.pathSeparator + new File(url.toURI()).getAbsolutePath());
+                // Note: This doesn't actually add to the runtime classpath, but might help in some cases
             } catch (Exception ignored) {
                 // Fall through
             }
             
             plugin.getLogger().warning("Could not add URL to classpath using any method: " + url);
+        } catch (java.lang.reflect.InaccessibleObjectException e) {
+            // Java 9+ module system restriction - dependencies may still work if they're in the plugin's classpath
+            // Only log if we couldn't use any fallback method
+            plugin.getLogger().log(Level.WARNING, "Failed to add URL to classpath (Java module system restriction): " + url + ". Dependencies may still work if included in the plugin jar.");
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to add URL to classpath: " + url, e);
         }
