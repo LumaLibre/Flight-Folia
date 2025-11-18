@@ -18,8 +18,17 @@
 
 package ca.tweetzy.flight.database;
 
+import ca.tweetzy.flight.database.query.QueryBuilder;
+import ca.tweetzy.flight.database.repository.BaseRepository;
+import ca.tweetzy.flight.database.repository.EntityMapper;
+import ca.tweetzy.flight.database.repository.Repository;
+import ca.tweetzy.flight.database.sync.DatabaseEvent;
+import ca.tweetzy.flight.database.sync.DatabaseEventListener;
+import ca.tweetzy.flight.database.sync.RedisSyncManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -29,6 +38,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -40,6 +50,10 @@ public class DataManagerAbstract {
     protected final Plugin plugin;
 
     protected final ExecutorService asyncPool = Executors.newSingleThreadExecutor();
+    
+    private QueryBuilder queryBuilder;
+    private RedisSyncManager redisSyncManager;
+    private final Map<Class<?>, Repository<?, ?>> repositories = new ConcurrentHashMap<>();
 
     @Deprecated
     private static final Map<String, LinkedList<Runnable>> queues = new HashMap<>();
@@ -202,5 +216,130 @@ public class DataManagerAbstract {
                 callback.accept(true);
             });
         });
+    }
+    
+    /**
+     * Get the QueryBuilder instance for this data manager
+     * 
+     * @return The QueryBuilder instance
+     */
+    @NotNull
+    public QueryBuilder getQueryBuilder() {
+        if (queryBuilder == null) {
+            queryBuilder = new QueryBuilder(databaseConnector, getTablePrefix());
+        }
+        return queryBuilder;
+    }
+    
+    /**
+     * Get or create a repository for the given entity type
+     * 
+     * @param entityClass The entity class
+     * @param tableName The table name (without prefix)
+     * @param mapper The entity mapper
+     * @return The repository instance
+     */
+    @NotNull
+    @SuppressWarnings("unchecked")
+    public <T, ID> Repository<T, ID> getRepository(@NotNull Class<T> entityClass,
+                                                     @NotNull String tableName,
+                                                     @NotNull EntityMapper<T> mapper) {
+        return (Repository<T, ID>) repositories.computeIfAbsent(entityClass, k -> 
+            new BaseRepository<>(databaseConnector, getTablePrefix(), tableName, mapper)
+        );
+    }
+    
+    /**
+     * Initialize Redis sync manager (optional)
+     * 
+     * @param host Redis host
+     * @param port Redis port
+     * @param password Redis password (null if no password)
+     * @param channel Redis pub/sub channel name
+     * @return true if initialization was successful
+     */
+    public boolean initializeRedisSync(@NotNull String host, int port, @Nullable String password, @NotNull String channel) {
+        if (redisSyncManager != null) {
+            plugin.getLogger().warning("Redis sync manager already initialized");
+            return redisSyncManager.isEnabled();
+        }
+        
+        redisSyncManager = new RedisSyncManager(plugin, channel);
+        boolean success = redisSyncManager.initialize(host, port, password);
+        
+        if (success) {
+            plugin.getLogger().info("Redis sync manager initialized for multi-server support");
+        } else {
+            plugin.getLogger().warning("Redis sync manager initialization failed - multi-server sync disabled");
+        }
+        
+        return success;
+    }
+    
+    /**
+     * Get the Redis sync manager (may be null if not initialized)
+     * 
+     * @return The Redis sync manager, or null if not initialized
+     */
+    @Nullable
+    public RedisSyncManager getRedisSyncManager() {
+        return redisSyncManager;
+    }
+    
+    /**
+     * Register a database event listener
+     * 
+     * @param listener The listener to register
+     */
+    public void registerDatabaseEventListener(@NotNull DatabaseEventListener listener) {
+        if (redisSyncManager != null && redisSyncManager.isEnabled()) {
+            redisSyncManager.registerListener(listener);
+        }
+    }
+    
+    /**
+     * Unregister a database event listener
+     * 
+     * @param listener The listener to unregister
+     */
+    public void unregisterDatabaseEventListener(@NotNull DatabaseEventListener listener) {
+        if (redisSyncManager != null) {
+            redisSyncManager.unregisterListener(listener);
+        }
+    }
+    
+    /**
+     * Publish a database event to other servers (if Redis sync is enabled)
+     * 
+     * @param eventType The event type (INSERT, UPDATE, DELETE)
+     * @param tableName The table name (without prefix)
+     * @param data The data map (column name -> value)
+     */
+    public void publishDatabaseEvent(@NotNull DatabaseEvent.EventType eventType,
+                                      @NotNull String tableName,
+                                      @NotNull Map<String, Object> data) {
+        if (redisSyncManager != null && redisSyncManager.isEnabled()) {
+            DatabaseEvent event = new DatabaseEvent(
+                redisSyncManager.getServerId(),
+                eventType,
+                tableName,
+                getTablePrefix(),
+                data
+            );
+            redisSyncManager.publishEvent(event);
+        }
+    }
+    
+    /**
+     * Shutdown the data manager and cleanup resources
+     */
+    public void shutdown() {
+        shutdownTaskQueue();
+        
+        if (redisSyncManager != null) {
+            redisSyncManager.shutdown();
+        }
+        
+        repositories.clear();
     }
 }

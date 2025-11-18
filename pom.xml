@@ -129,6 +129,24 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.44.1.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>2.0</version>
@@ -206,6 +224,9 @@
                             <include>com.cryptomorin.xseries:*</include>
                             <include>org.yaml:snakeyaml</include>
                             <include>de.tr7zw:*</include>
+                            <include>org.xerial:sqlite-jdbc</include>
+                            <include>redis.clients:jedis</include>
+                            <include>com.google.code.gson:gson</include>
                         </includes>
                     </artifactSet>
                     <filters>
@@ -218,6 +239,9 @@
                                 <include>io/github/bananapuncher714/</include>
                                 <include>de/tr7zw/</include>
                                 <include>org/yaml/</include>
+                                <include>org/sqlite/</include>
+                                <include>redis/clients/</include>
+                                <include>com/google/gson/</include>
                             </includes>
                             <excludes>
                                 <exclude>META-INF/MANIFEST.MF</exclude>
@@ -257,6 +281,10 @@
                         <relocation>
                             <pattern>io.github.bananapuncher714.nbteditor</pattern>
                             <shadedPattern>${project.groupId}.${project.artifactId}.comp</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>redis.clients</pattern>
+                            <shadedPattern>${project.groupId}.${project.artifactId}.third_party.redis</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>

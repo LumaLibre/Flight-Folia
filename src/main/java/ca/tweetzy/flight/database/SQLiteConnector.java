@@ -19,22 +19,24 @@
 package ca.tweetzy.flight.database;
 
 import ca.tweetzy.flight.comp.enums.ServerVersion;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class SQLiteConnector implements DatabaseConnector {
 
     private final Plugin plugin;
-    private final String connectionString;
-    private Connection connection;
+    private HikariDataSource hikari;
+    private boolean initializedSuccessfully;
 
     public SQLiteConnector(Plugin plugin) {
         this.plugin = plugin;
-        this.connectionString =
+        
+        String connectionString =
                 ServerVersion.isServerVersionBelow(ServerVersion.V1_16)
                         ? "jdbc:sqlite:" + plugin.getDataFolder() + File.separator + plugin.getDescription().getName().toLowerCase() + ".db"
                         : "jdbc:sqlite:" + plugin.getDataFolder() + File.separator + plugin.getDescription().getName().toLowerCase() + ".db?journal_mode=WAL";
@@ -44,37 +46,58 @@ public class SQLiteConnector implements DatabaseConnector {
         } catch (ClassNotFoundException ex) {
             ex.printStackTrace();
         }
+
+        plugin.getLogger().info("Initializing SQLite connection pool for " + plugin.getDescription().getName());
+
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(connectionString);
+        config.setDriverClassName("org.sqlite.JDBC");
+        config.setMaximumPoolSize(3);
+        config.setMinimumIdle(1);
+        config.setConnectionTimeout(30000);
+        config.setIdleTimeout(600000);
+        config.setMaxLifetime(1800000);
+        config.setLeakDetectionThreshold(60000);
+        
+        // SQLite-specific optimizations
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+
+        try {
+            this.hikari = new HikariDataSource(config);
+            this.initializedSuccessfully = true;
+            plugin.getLogger().info("SQLite connection pool initialized successfully");
+        } catch (Exception ex) {
+            this.initializedSuccessfully = false;
+            plugin.getLogger().severe("Failed to initialize SQLite connection pool: " + ex.getMessage());
+            ex.printStackTrace();
+        }
     }
 
     @Override
     public boolean isInitialized() {
-        return true; // Always available
+        return this.initializedSuccessfully;
     }
 
     @Override
     public void closeConnection() {
-        try {
-            if (this.connection != null) {
-                this.connection.close();
-            }
-        } catch (SQLException ex) {
-            this.plugin.getLogger().severe("An error occurred closing the SQLite database connection: " + ex.getMessage());
+        if (this.hikari != null && !this.hikari.isClosed()) {
+            this.hikari.close();
+            this.plugin.getLogger().info("SQLite connection pool closed");
         }
     }
 
     @Override
     public void connect(ConnectionCallback callback) {
-        if (this.connection == null) {
-            try {
-                this.connection = DriverManager.getConnection(this.connectionString);
-            } catch (SQLException ex) {
-                this.plugin.getLogger().severe("An error occurred retrieving the SQLite database connection: " + ex.getMessage());
-            }
+        if (!this.initializedSuccessfully || this.hikari == null) {
+            this.plugin.getLogger().severe("SQLite connection pool is not initialized");
+            return;
         }
 
-        try {
-            callback.accept(this.connection);
-        } catch (Exception ex) {
+        try (Connection connection = this.hikari.getConnection()) {
+            callback.accept(connection);
+        } catch (SQLException ex) {
             this.plugin.getLogger().severe("An error occurred executing an SQLite query: " + ex.getMessage());
             ex.printStackTrace();
         }
