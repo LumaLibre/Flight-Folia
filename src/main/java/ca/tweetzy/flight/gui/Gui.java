@@ -60,9 +60,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 public class Gui {
@@ -84,9 +86,18 @@ public class Gui {
     protected boolean isTransitioning = false;
 
     // Slot management
+    // Thread Safety: These collections use HashMap (not ConcurrentHashMap) because all GUI operations
+    // are guaranteed to run on the main thread. Bukkit events (clicks, opens, closes) execute on
+    // the main thread, and all GUI manipulation methods should be called from the main thread only.
+    // If async access is ever needed, these should be changed to ConcurrentHashMap or properly synchronized.
     protected final Map<Integer, Boolean> unlockedCells = new HashMap<>();
     protected final Map<Integer, ItemStack> cellItems = new HashMap<>();
     protected final Map<Integer, Map<ClickType, Clickable>> conditionalButtons = new HashMap<>();
+    
+    // Performance: Track dirty slots for efficient updates
+    // Only slots in this set will be updated when update() is called, improving performance for large GUIs
+    protected final Set<Integer> dirtySlots = new HashSet<>();
+    protected boolean allSlotsDirty = false; // If true, update all slots (used for full refresh)
 
     // Default items
     protected ItemStack blankItem = QuickItem.of(CompMaterial.BLACK_STAINED_GLASS_PANE).name(" ").lore(" ").make();
@@ -518,8 +529,23 @@ public class Gui {
 
     @NotNull
     public Gui setItem(int cell, @Nullable ItemStack item) {
-        cellItems.put(cell, item);
-        if (inventory != null && cell >= 0 && cell < inventory.getSize()) inventory.setItem(cell, item);
+        // Security: Validate slot bounds even when inventory is null
+        int maxSlot = rows * inventoryType.columns - 1;
+        if (cell < 0 || cell > maxSlot) {
+            return this; // Invalid slot, ignore
+        }
+        
+        // Security: Clone ItemStack to prevent reference sharing and potential duplication exploits
+        // This ensures that external modifications to the original ItemStack don't affect the GUI
+        ItemStack clonedItem = item != null ? item.clone() : null;
+        cellItems.put(cell, clonedItem);
+        
+        // Performance: Mark slot as dirty for efficient updates
+        dirtySlots.add(cell);
+        
+        if (inventory != null && cell >= 0 && cell < inventory.getSize()) {
+            inventory.setItem(cell, clonedItem);
+        }
         return this;
     }
 
@@ -734,7 +760,12 @@ public class Gui {
         this.guiManager = manager;
         createInventory();
         int size = rows * inventoryType.columns;
+        // Performance: Mark all slots as dirty since we're initializing the entire inventory
+        markAllSlotsDirty();
         for (int i = 0; i < size; i++) inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
+        // Clear dirty state after initial population
+        allSlotsDirty = false;
+        dirtySlots.clear();
         return inventory;
     }
 
@@ -965,10 +996,40 @@ public class Gui {
         }
     }
 
+    /**
+     * Updates the GUI inventory with current item data.
+     * Performance: Only updates slots that have been marked as dirty (modified),
+     * unless allSlotsDirty is true, in which case all slots are updated.
+     */
     public void update() {
         if (inventory == null) return;
         int size = rows * inventoryType.columns;
-        for (int i = 0; i < size; i++) inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
+        
+        if (allSlotsDirty) {
+            // Full refresh: update all slots
+            for (int i = 0; i < size; i++) {
+                inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
+            }
+            allSlotsDirty = false;
+            dirtySlots.clear();
+        } else if (!dirtySlots.isEmpty()) {
+            // Partial update: only update dirty slots
+            for (int i : dirtySlots) {
+                if (i >= 0 && i < size) {
+                    inventory.setItem(i, cellItems.getOrDefault(i, unlockedCells.getOrDefault(i, false) ? AIR : blankItem));
+                }
+            }
+            dirtySlots.clear();
+        }
+    }
+    
+    /**
+     * Marks all slots as dirty, forcing a full refresh on next update().
+     * Useful when you want to ensure all slots are updated regardless of dirty tracking.
+     */
+    public void markAllSlotsDirty() {
+        allSlotsDirty = true;
+        dirtySlots.clear();
     }
 
     public void reset() {
@@ -976,6 +1037,8 @@ public class Gui {
         cellItems.clear();
         unlockedCells.clear();
         conditionalButtons.clear();
+        dirtySlots.clear();
+        allSlotsDirty = false;
         page = 1;
     }
 

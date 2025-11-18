@@ -16,6 +16,7 @@ import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -370,8 +371,27 @@ public class GuiManager {
             // Session validation
             if (!validateSession(player, gui)) return;
 
-            if (!gui.allowDropItems)
-                player.setItemOnCursor(null);
+            // Security: Handle cursor items properly to prevent item loss
+            // If dropping items is not allowed, return cursor item to player inventory
+            if (!gui.allowDropItems) {
+                ItemStack cursorItem = player.getItemOnCursor();
+                if (cursorItem != null && cursorItem.getType() != Material.AIR) {
+                    // Try to add item to player inventory
+                    // Use HashMap to store remaining items that couldn't fit
+                    HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(cursorItem.clone());
+                    // If all items were added successfully, clear cursor
+                    if (remaining.isEmpty()) {
+                        player.setItemOnCursor(null);
+                    } else {
+                        // Some items couldn't fit - keep them on cursor to prevent item loss
+                        // The remaining items map contains what couldn't fit, so we keep the original on cursor
+                        // This respects allowDropItems=false while preventing item loss
+                    }
+                } else {
+                    // No item on cursor, just clear it
+                    player.setItemOnCursor(null);
+                }
+            }
 
             // Cancel update tasks for updating GUIs before closing
             try {
