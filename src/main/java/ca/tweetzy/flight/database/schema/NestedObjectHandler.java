@@ -28,6 +28,7 @@ import java.lang.reflect.Field;
 
 /**
  * Handles serialization/deserialization of nested objects
+ * Uses Spigot's built-in Gson library
  */
 public class NestedObjectHandler {
     

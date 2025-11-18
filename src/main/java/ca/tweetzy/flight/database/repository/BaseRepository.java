@@ -20,10 +20,13 @@ package ca.tweetzy.flight.database.repository;
 
 import ca.tweetzy.flight.database.Callback;
 import ca.tweetzy.flight.database.DatabaseConnector;
+import ca.tweetzy.flight.database.MySQLConnector;
+import ca.tweetzy.flight.database.SQLiteConnector;
 import ca.tweetzy.flight.database.query.QueryBuilder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -58,44 +61,94 @@ public class BaseRepository<T, ID> implements Repository<T, ID> {
         Map<String, Object> values = mapper.toMap(entity);
         Object id = mapper.getId(entity);
         
-        // Check if entity exists
-        @SuppressWarnings("unchecked")
-        ID typedId = (ID) id;
-        existsById(typedId, (ex, exists) -> {
-            if (ex != null) {
+        // Use atomic upsert to prevent race conditions
+        // MySQL: INSERT ... ON DUPLICATE KEY UPDATE
+        // SQLite: INSERT OR REPLACE
+        connector.connect(connection -> {
+            try {
+                String idColumn = mapper.getIdColumn();
+                boolean isMySQL = connector instanceof MySQLConnector;
+                boolean isSQLite = connector instanceof SQLiteConnector;
+                
+                // Build column names and placeholders
+                List<String> columns = new java.util.ArrayList<>(values.keySet());
+                List<String> placeholders = new java.util.ArrayList<>();
+                for (int i = 0; i < columns.size(); i++) {
+                    placeholders.add("?");
+                }
+                
+                String sql;
+                if (isMySQL) {
+                    // MySQL: INSERT ... ON DUPLICATE KEY UPDATE
+                    sql = "INSERT INTO " + tablePrefix + tableName + " (" + 
+                          String.join(", ", columns) + ") VALUES (" + 
+                          String.join(", ", placeholders) + ") " +
+                          "ON DUPLICATE KEY UPDATE ";
+                    List<String> updateClauses = new java.util.ArrayList<>();
+                    for (String column : columns) {
+                        if (!column.equals(idColumn)) {
+                            updateClauses.add(column + " = VALUES(" + column + ")");
+                        }
+                    }
+                    sql += String.join(", ", updateClauses);
+                } else if (isSQLite) {
+                    // SQLite: INSERT OR REPLACE
+                    sql = "INSERT OR REPLACE INTO " + tablePrefix + tableName + " (" + 
+                          String.join(", ", columns) + ") VALUES (" + 
+                          String.join(", ", placeholders) + ")";
+                } else {
+                    // Fallback: try update first, then insert if no rows affected
+                    String updateSql = "UPDATE " + tablePrefix + tableName + " SET ";
+                    List<String> setClauses = new java.util.ArrayList<>();
+                    for (String column : columns) {
+                        if (!column.equals(idColumn)) {
+                            setClauses.add(column + " = ?");
+                        }
+                    }
+                    updateSql += String.join(", ", setClauses);
+                    updateSql += " WHERE " + idColumn + " = ?";
+                    
+                    try (java.sql.PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
+                        int paramIndex = 1;
+                        for (String column : columns) {
+                            if (!column.equals(idColumn)) {
+                                setParameter(updateStmt, paramIndex++, values.get(column));
+                            }
+                        }
+                        setParameter(updateStmt, paramIndex, id);
+                        
+                        int affected = updateStmt.executeUpdate();
+                        if (affected > 0) {
+                            // Update successful
+                            if (callback != null) {
+                                callback.accept(null, entity);
+                            }
+                            return;
+                        }
+                    }
+                    
+                    // No update occurred, do insert
+                    sql = "INSERT INTO " + tablePrefix + tableName + " (" + 
+                          String.join(", ", columns) + ") VALUES (" + 
+                          String.join(", ", placeholders) + ")";
+                }
+                
+                try (java.sql.PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    int paramIndex = 1;
+                    for (String column : columns) {
+                        setParameter(stmt, paramIndex++, values.get(column));
+                    }
+                    
+                    stmt.executeUpdate();
+                    
+                    if (callback != null) {
+                        callback.accept(null, entity);
+                    }
+                }
+            } catch (SQLException ex) {
                 if (callback != null) {
                     callback.accept(ex, null);
                 }
-                return;
-            }
-            
-            if (exists != null && exists) {
-                // Update existing entity
-                ca.tweetzy.flight.database.query.UpdateQuery updateQuery = queryBuilder.update(tableName)
-                    .setAll(values)
-                    .where(mapper.getIdColumn(), id);
-                updateQuery.execute((updateEx, affectedRows) -> {
-                    if (callback != null) {
-                        if (updateEx != null) {
-                            callback.accept(updateEx, null);
-                        } else {
-                            callback.accept(null, entity);
-                        }
-                    }
-                });
-            } else {
-                // Insert new entity
-                ca.tweetzy.flight.database.query.InsertQuery insertQuery = queryBuilder.insert(tableName)
-                    .setAll(values);
-                insertQuery.execute((insertEx, affectedRows) -> {
-                    if (callback != null) {
-                        if (insertEx != null) {
-                            callback.accept(insertEx, null);
-                        } else {
-                            callback.accept(null, entity);
-                        }
-                    }
-                });
             }
         });
     }

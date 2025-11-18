@@ -20,6 +20,9 @@ package ca.tweetzy.flight;
 
 import ca.tweetzy.flight.config.tweetzy.TweetzyYamlConfig;
 import ca.tweetzy.flight.database.DataManagerAbstract;
+import ca.tweetzy.flight.dependency.Dependency;
+import ca.tweetzy.flight.dependency.DependencyLoader;
+import ca.tweetzy.flight.dependency.Relocation;
 import ca.tweetzy.flight.utils.Common;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -27,7 +30,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -65,10 +70,49 @@ public abstract class FlightPlugin extends JavaPlugin implements Listener {
     public final void onLoad() {
         try {
             getInstance();
+            
+            // Load optional dependencies at runtime
+            Set<Dependency> dependencies = getOptionalDependencies();
+            if (!dependencies.isEmpty()) {
+                new DependencyLoader(this).loadDependencies(dependencies);
+            }
+            
             onWake();
         } catch (final Throwable throwable) {
             criticalErrorOnPluginStartup(throwable);
         }
+    }
+    
+    /**
+     * Get optional dependencies that should be loaded at runtime
+     * Override this method to add plugin-specific optional dependencies
+     */
+    protected Set<Dependency> getOptionalDependencies() {
+        Set<Dependency> dependencies = new HashSet<>();
+        
+        // Load SQLite JDBC - needed for SQLite database (default)
+        dependencies.add(new Dependency(
+                "https://repo1.maven.org/maven2",
+                "org.xerial",
+                "sqlite-jdbc",
+                "3.44.1.0",
+                true,
+                new Relocation("org.sqlite", "ca.tweetzy.flight.third_party.org.sqlite")
+        ));
+        
+        // Gson is provided by Spigot - no need to load it
+        
+        // Load Jedis (Redis) only if needed - it's optional for Redis sync
+        dependencies.add(new Dependency(
+                "https://repo1.maven.org/maven2",
+                "redis.clients",
+                "jedis",
+                "5.1.0",
+                true,
+                new Relocation("redis.clients", "ca.tweetzy.flight.third_party.redis.clients")
+        ));
+        
+        return dependencies;
     }
 
     @Override

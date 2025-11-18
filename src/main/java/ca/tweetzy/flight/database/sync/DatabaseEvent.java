@@ -27,6 +27,7 @@ import java.util.UUID;
 
 /**
  * Represents a database change event for multi-server synchronization
+ * Uses Spigot's built-in Gson library
  */
 public class DatabaseEvent {
     
