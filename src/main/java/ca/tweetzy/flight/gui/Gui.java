@@ -1048,8 +1048,7 @@ public class Gui {
 
     private static String trimTitle(String title) {
         if (title == null) return "";
-        int maxLength = ServerVersion.isServerVersionAtLeast(ServerVersion.V1_14) ? 32 : 16;
-        return title.length() > maxLength ? title.substring(0, maxLength) : title;
+        return title;
     }
 
     protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable clicker) {

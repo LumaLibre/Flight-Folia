@@ -10,7 +10,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
@@ -151,7 +150,17 @@ public class GuiManager {
     // Reflection utility for InventoryView compatibility
     // ------------------------------------------------------------------
 
-    public static Inventory getTopInventoryCompat(InventoryView view) {
+    /**
+     * In API versions 1.20.6 and earlier, InventoryView is a class.
+     * In versions 1.21 and later, it is an interface.
+     * This method uses reflection to get the top Inventory object from the
+     * InventoryView, to avoid runtime errors when compiled against one version
+     * but running on another.
+     * 
+     * @param view The InventoryView object (passed as Object to avoid compile-time type checking issues)
+     * @return The top Inventory object from the InventoryView, or null if view is null or reflection fails
+     */
+    public static Inventory getTopInventoryCompat(Object view) {
         if (view == null) return null;
         try {
             Method getTopInventory = view.getClass().getMethod("getTopInventory");
