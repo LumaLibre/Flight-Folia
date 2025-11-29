@@ -93,7 +93,12 @@ public class Gui {
     // If async access is ever needed, these should be changed to ConcurrentHashMap or properly synchronized.
     protected final Map<Integer, Boolean> unlockedCells = new ConcurrentHashMap<>();
     protected final Map<Integer, ItemStack> cellItems = new ConcurrentHashMap<>();
-    protected final Map<Integer, Map<ClickType, Clickable>> conditionalButtons = new ConcurrentHashMap<>();
+    protected final Map<Integer, Map<Object, Clickable>> conditionalButtons = new ConcurrentHashMap<>();
+    
+    // Sentinel objects for null keys/values in ConcurrentHashMap (which doesn't allow nulls)
+    // These are used to represent null ClickType keys and null Clickable values
+    private static final Object NULL_CLICK_TYPE_SENTINEL = new Object();
+    private static final Clickable NULL_CLICKABLE_SENTINEL = event -> {}; // Empty implementation
     
     // Performance: Track dirty slots for efficient updates
     // Only slots in this set will be updated when update() is called, improving performance for large GUIs
@@ -796,10 +801,23 @@ public class Gui {
         }
 
         int cell = event.getSlot();
-        Map<ClickType, Clickable> conditionals = conditionalButtons.get(cell);
+        Map<Object, Clickable> conditionals = conditionalButtons.get(cell);
 
         Clickable button = null;
-        if (conditionals != null) button = conditionals.getOrDefault(event.getClick(), conditionals.get(null));
+        if (conditionals != null) {
+            // Try to get the button for the specific click type first
+            Clickable specificButton = conditionals.get(event.getClick());
+            if (specificButton != null) {
+                button = specificButton;
+            } else {
+                // Fall back to the null key (stored as sentinel)
+                button = conditionals.get(NULL_CLICK_TYPE_SENTINEL);
+            }
+            // Convert sentinel back to null if needed
+            if (button == NULL_CLICKABLE_SENTINEL) {
+                button = null;
+            }
+        }
 
         if (button != null) {
             long now = System.currentTimeMillis();
@@ -1053,7 +1071,10 @@ public class Gui {
     }
 
     protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable clicker) {
-        conditionalButtons.computeIfAbsent(cell, k -> new ConcurrentHashMap<>()).put(type, clicker);
+        // Convert null to sentinel objects since ConcurrentHashMap doesn't allow null keys/values
+        Object key = type != null ? type : NULL_CLICK_TYPE_SENTINEL;
+        Clickable value = clicker != null ? clicker : NULL_CLICKABLE_SENTINEL;
+        conditionalButtons.computeIfAbsent(cell, k -> new ConcurrentHashMap<>()).put(key, value);
     }
 
     // --------------------------------------
