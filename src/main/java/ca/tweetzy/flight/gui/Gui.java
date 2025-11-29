@@ -65,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 public class Gui {
@@ -90,9 +91,9 @@ public class Gui {
     // are guaranteed to run on the main thread. Bukkit events (clicks, opens, closes) execute on
     // the main thread, and all GUI manipulation methods should be called from the main thread only.
     // If async access is ever needed, these should be changed to ConcurrentHashMap or properly synchronized.
-    protected final Map<Integer, Boolean> unlockedCells = new HashMap<>();
-    protected final Map<Integer, ItemStack> cellItems = new HashMap<>();
-    protected final Map<Integer, Map<ClickType, Clickable>> conditionalButtons = new HashMap<>();
+    protected final Map<Integer, Boolean> unlockedCells = new ConcurrentHashMap<>();
+    protected final Map<Integer, ItemStack> cellItems = new ConcurrentHashMap<>();
+    protected final Map<Integer, Map<ClickType, Clickable>> conditionalButtons = new ConcurrentHashMap<>();
     
     // Performance: Track dirty slots for efficient updates
     // Only slots in this set will be updated when update() is called, improving performance for large GUIs
@@ -1052,7 +1053,7 @@ public class Gui {
     }
 
     protected void setConditional(int cell, @Nullable ClickType type, @Nullable Clickable clicker) {
-        conditionalButtons.computeIfAbsent(cell, k -> new HashMap<>()).put(type, clicker);
+        conditionalButtons.computeIfAbsent(cell, k -> new ConcurrentHashMap<>()).put(type, clicker);
     }
 
     // --------------------------------------
