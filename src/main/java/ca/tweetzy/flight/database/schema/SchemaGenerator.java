@@ -24,6 +24,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,6 +58,11 @@ public class SchemaGenerator {
         for (Field field : entityClass.getDeclaredFields()) {
             // Skip ignored fields
             if (field.isAnnotationPresent(Ignore.class)) {
+                continue;
+            }
+            
+            // Skip static fields (constants, class-level fields)
+            if (Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
             
