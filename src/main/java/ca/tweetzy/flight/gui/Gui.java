@@ -94,12 +94,12 @@ public class Gui {
     protected final Map<Integer, Boolean> unlockedCells = new ConcurrentHashMap<>();
     protected final Map<Integer, ItemStack> cellItems = new ConcurrentHashMap<>();
     protected final Map<Integer, Map<Object, Clickable>> conditionalButtons = new ConcurrentHashMap<>();
-    
+
     // Sentinel objects for null keys/values in ConcurrentHashMap (which doesn't allow nulls)
     // These are used to represent null ClickType keys and null Clickable values
     private static final Object NULL_CLICK_TYPE_SENTINEL = new Object();
     private static final Clickable NULL_CLICKABLE_SENTINEL = event -> {}; // Empty implementation
-    
+
     // Performance: Track dirty slots for efficient updates
     // Only slots in this set will be updated when update() is called, improving performance for large GUIs
     protected final Set<Integer> dirtySlots = new HashSet<>();
@@ -111,7 +111,7 @@ public class Gui {
 
     // Pagination items
     protected int nextPageIndex = -1, prevPageIndex = -1;
-    protected ItemStack nextPageItem, prevPageItem;
+    protected ItemStack nextPageItem = blankItem, prevPageItem = blankItem;
     protected ItemStack nextPage, prevPage;
     protected Gui parent = null;
 
@@ -187,7 +187,7 @@ public class Gui {
      * Returns true if the given player currently has an active input session.
      * This is useful for GUIs to check if they should skip certain operations
      * (like returning items) when an input is active.
-     * 
+     *
      * @param player The player to check
      * @return true if the player has an active input, false otherwise
      */
@@ -419,7 +419,7 @@ public class Gui {
     /**
      * Safely transitions from this GUI to a new GUI.
      * This prevents setOnClose handlers from running during the transition.
-     * 
+     *
      * @param manager The GuiManager instance
      * @param player The player to transition
      * @param newGui The new GUI to show
@@ -428,12 +428,12 @@ public class Gui {
      * Safely transitions from this GUI to a new GUI.
      * This method sets the transition flag to prevent setOnClose handlers from running
      * and ensures proper session lock management.
-     * 
+     *
      * Security features:
      * - Validates that this GUI is the active session for the player
      * - Prevents transition if player is offline
      * - Ensures new GUI is not null
-     * 
+     *
      * @param manager The GuiManager instance
      * @param player The player transitioning
      * @param newGui The new GUI to transition to (must not be null)
@@ -444,12 +444,12 @@ public class Gui {
         if (player == null || !player.isOnline()) {
             throw new IllegalArgumentException("Cannot transition GUI: player is offline or null");
         }
-        
+
         // Security validation: ensure new GUI is not null
         if (newGui == null) {
             throw new IllegalArgumentException("Cannot transition to null GUI");
         }
-        
+
         // Security validation: ensure this GUI is still the active session
         // This prevents transitions from stale/expired GUI instances
         if (!GUISessionLock.isValid(player.getUniqueId(), this)) {
@@ -458,7 +458,7 @@ public class Gui {
             manager.showGUI(player, newGui);
             return;
         }
-        
+
         // CRITICAL: Set transition flags BEFORE showing new GUI
         // This ensures that:
         // 1. setOnClose handlers won't run during transition
@@ -467,7 +467,7 @@ public class Gui {
         this.isTransitioning = true;
         this.allowClose = true;
         this.open = false; // Mark as closed to prevent further interactions
-        
+
         // Show the new GUI - it will replace this one
         // The showGUI method will handle updating the session lock atomically
         manager.showGUI(player, newGui);
@@ -540,15 +540,15 @@ public class Gui {
         if (cell < 0 || cell > maxSlot) {
             return this; // Invalid slot, ignore
         }
-        
+
         // Security: Clone ItemStack to prevent reference sharing and potential duplication exploits
         // This ensures that external modifications to the original ItemStack don't affect the GUI
         ItemStack clonedItem = item != null ? item.clone() : null;
         cellItems.put(cell, clonedItem);
-        
+
         // Performance: Mark slot as dirty for efficient updates
         dirtySlots.add(cell);
-        
+
         if (inventory != null && cell >= 0 && cell < inventory.getSize()) {
             inventory.setItem(cell, clonedItem);
         }
@@ -642,6 +642,18 @@ public class Gui {
     public Gui setUnlockedRange(int rowStart, int colStart, int rowEnd, int colEnd, boolean open) {
         int last = colEnd + rowEnd * inventoryType.columns;
         for (int i = colStart + rowStart * inventoryType.columns; i <= last; i++) unlockedCells.put(i, open);
+        return this;
+    }
+
+    @NotNull
+    public Gui mirrorFill(int row, int col, boolean mirrorRow, boolean mirrorCol, ItemStack item) {
+        setItem(row, col, item);
+        if (mirrorRow)
+            setItem(rows - row - 1, col, item);
+        if (mirrorCol)
+            setItem(row, 8 - col, item);
+        if (mirrorRow && mirrorCol)
+            setItem(rows - row - 1, 8 - col, item);
         return this;
     }
 
@@ -923,16 +935,16 @@ public class Gui {
         if (player == null || !player.isOnline()) {
             return;
         }
-        
+
         // --- REGISTER SESSION ---
         // This prevents old/delayed client packets from interacting with previous GUI instances
         GUISessionLock.start(player.getUniqueId(), this);
         open = true;
         guiManager = manager;
-        
+
         // Initialize config context if config is loaded
         initConfigContext(player);
-        
+
         // Re-apply config buttons now that context is initialized
         if (guiConfig != null && configContext != null) {
             for (GuiConfigButton button : guiConfig.getButtons().values()) {
@@ -940,14 +952,14 @@ public class Gui {
                     applyButton(button);
                 }
             }
-            
+
             // Render dynamic content
             GuiConfigDynamicRenderer.renderDynamicContent(this, guiConfig, configContext);
         }
-        
+
         // Reset transition flag when opening (in case of edge cases)
         isTransitioning = false;
-        
+
         if (opener != null) {
             try {
                 opener.onOpen(new GuiOpenEvent(manager, this, player));
@@ -966,7 +978,7 @@ public class Gui {
             GUISessionLock.end(player != null ? player.getUniqueId() : null);
             return;
         }
-        
+
         if (!allowClose) {
             // Security: Validate this GUI is still the active session before reopening
             if (GUISessionLock.isValid(player.getUniqueId(), this)) {
@@ -978,7 +990,7 @@ public class Gui {
         // End session lock - this prevents old GUI instances from being interacted with
         GUISessionLock.end(player.getUniqueId());
         boolean showParent = open && parent != null;
-        
+
         // Don't run setOnClose handler if we're transitioning to another GUI
         // This prevents unwanted reopening and allows smooth transitions
         // Security: Always run close handler if not transitioning to ensure items are returned
@@ -991,11 +1003,11 @@ public class Gui {
                 e.printStackTrace();
             }
         }
-        
+
         // Reset transition flag after close handler check
         boolean wasTransitioning = isTransitioning;
         isTransitioning = false;
-        
+
         // Security: Validate parent GUI before reopening to prevent exploitation
         // Only show parent if we're not transitioning (transitioning means we're going to a specific GUI)
         if (!wasTransitioning && showParent && parent != null) {
@@ -1023,7 +1035,7 @@ public class Gui {
     public void update() {
         if (inventory == null) return;
         int size = rows * inventoryType.columns;
-        
+
         if (allSlotsDirty) {
             // Full refresh: update all slots
             for (int i = 0; i < size; i++) {
@@ -1041,7 +1053,7 @@ public class Gui {
             dirtySlots.clear();
         }
     }
-    
+
     /**
      * Marks all slots as dirty, forcing a full refresh on next update().
      * Useful when you want to ensure all slots are updated regardless of dirty tracking.
@@ -1094,7 +1106,7 @@ public class Gui {
     /**
      * Load configuration from a config file.
      * This is an optional feature - GUIs can still be configured programmatically.
-     * 
+     *
      * @param configName The name of the config file (without .yml extension)
      * @return true if config was loaded successfully, false otherwise
      */
@@ -1225,7 +1237,7 @@ public class Gui {
 
     /**
      * Set a context variable for use in config expressions.
-     * 
+     *
      * @param key The variable key
      * @param value The variable value
      */
@@ -1245,7 +1257,7 @@ public class Gui {
     protected void initConfigContext(@NotNull Player player) {
         if (guiConfig != null) {
             configContext = new GuiConfigContext(player, this);
-            
+
             // Set variables from config
             for (Map.Entry<String, String> entry : guiConfig.getVariables().entrySet()) {
                 String varName = entry.getKey();
@@ -1259,7 +1271,7 @@ public class Gui {
 
     /**
      * Get the GUI config context.
-     * 
+     *
      * @return The context, or null if not initialized
      */
     @Nullable
