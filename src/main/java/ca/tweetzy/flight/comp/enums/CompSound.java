@@ -19,6 +19,8 @@ package ca.tweetzy.flight.comp.enums;
 
 import com.google.common.base.Enums;
 import com.google.common.base.Strings;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.Bukkit;
 import org.bukkit.Instrument;
 import org.bukkit.Location;
 import org.bukkit.Note;
@@ -26,8 +28,6 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -41,6 +41,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -1879,8 +1881,8 @@ public enum CompSound {
      * @since 2.0.0
      */
     @Nonnull
-    public static BukkitTask playAscendingNote(@Nonnull Plugin plugin, @Nonnull Player player, @Nonnull Entity playTo, @Nonnull Instrument instrument,
-                                               int ascendLevel, int delay) {
+    public static ScheduledTask playAscendingNote(@Nonnull Plugin plugin, @Nonnull Player player, @Nonnull Entity playTo, @Nonnull Instrument instrument,
+                                                  int ascendLevel, int delay) {
         Objects.requireNonNull(player, "Cannot play note from null player");
         Objects.requireNonNull(playTo, "Cannot play note to null entity");
 
@@ -1888,15 +1890,11 @@ public enum CompSound {
         if (ascendLevel > 7) throw new IllegalArgumentException("Note ascend level cannot be greater than 7");
         if (delay <= 0) throw new IllegalArgumentException("Delay ticks must be at least 1");
 
-        return new BukkitRunnable() {
-            int repeating = ascendLevel;
-
-            @Override
-            public void run() {
-                player.playNote(playTo.getLocation(), instrument, Note.natural(1, Note.Tone.values()[ascendLevel - repeating]));
-                if (repeating-- == 0) cancel();
-            }
-        }.runTaskTimerAsynchronously(plugin, 0, delay);
+        AtomicInteger repeating = new AtomicInteger(ascendLevel);
+        return Bukkit.getAsyncScheduler().runAtFixedRate(plugin, (t) -> {
+            player.playNote(playTo.getLocation(), instrument, Note.natural(1, Note.Tone.values()[ascendLevel - repeating.get()]));
+            if (repeating.getAndDecrement() == 0) t.cancel();
+        }, 0, delay * 50L, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1956,7 +1954,7 @@ public enum CompSound {
      * @since 2.0.0
      */
     @Nonnull
-    public BukkitTask playRepeatedly(@Nonnull Plugin plugin, @Nonnull Entity entity, float volume, float pitch, int repeat, int delay) {
+    public ScheduledTask playRepeatedly(@Nonnull Plugin plugin, @Nonnull Entity entity, float volume, float pitch, int repeat, int delay) {
         return playRepeatedly(plugin, Collections.singleton(entity), volume, pitch, repeat, delay);
     }
 
@@ -1976,25 +1974,23 @@ public enum CompSound {
      * @since 2.0.0
      */
     @Nonnull
-    public BukkitTask playRepeatedly(@Nonnull Plugin plugin, @Nonnull Iterable<? extends Entity> entities, float volume, float pitch, int repeat, int delay) {
+    public ScheduledTask playRepeatedly(@Nonnull Plugin plugin, @Nonnull Iterable<? extends Entity> entities, float volume, float pitch, int repeat, int delay) {
         Objects.requireNonNull(plugin, "Cannot play repeating sound from null plugin");
         Objects.requireNonNull(entities, "Cannot play repeating sound at null locations");
 
         if (repeat <= 0) throw new IllegalArgumentException("Cannot repeat playing sound " + repeat + " times");
         if (delay <= 0) throw new IllegalArgumentException("Delay ticks must be at least 1");
 
-        return new BukkitRunnable() {
-            int repeating = repeat;
-
-            @Override
-            public void run() {
-                for (Entity entity : entities) {
+        AtomicInteger repeating = new AtomicInteger(repeat);
+        return Bukkit.getAsyncScheduler().runAtFixedRate(plugin, (task) -> {
+            for (Entity entity : entities) {
+                entity.getScheduler().run(plugin, (t) -> {
                     play(entity.getLocation(), volume, pitch);
-                }
-
-                if (repeating-- == 0) cancel();
+                }, null);
             }
-        }.runTaskTimer(plugin, 0, delay);
+
+            if (repeating.getAndDecrement() == 0) task.cancel();
+        }, 0, delay * 50L, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -2017,12 +2013,12 @@ public enum CompSound {
      * @param player the player to play the sound to.
      * @param sound  the sound to play to the player.
      *
-     * @see #play(Location, String)
+     * @see #play(Location, String, Plugin)
      * @since 1.0.0
      */
     @Nonnull
     @Deprecated
-    public static CompletableFuture<Record> play(@Nonnull Player player, @Nullable String sound) {
+    public static CompletableFuture<Record> play(@Nonnull Player player, @Nullable String sound, @Nonnull Plugin plugin) {
         Objects.requireNonNull(player, "Cannot play sound to null player");
         return CompletableFuture.supplyAsync(() -> {
             Record record;
@@ -2032,7 +2028,7 @@ public enum CompSound {
                 return null;
             }
             if (record == null) return null;
-            record.forPlayer(player).play();
+            record.forPlayer(player).play(plugin);
             return record;
         }).exceptionally(x -> {
             x.printStackTrace();
@@ -2043,15 +2039,15 @@ public enum CompSound {
     /**
      * A quick async way to play a sound from the config.
      *
-     * @see #play(Location, String)
+     * @see #play(Location, String, Plugin)
      * @since 3.0.0
      */
     @Nullable
-    public static Record play(@Nonnull Location location, @Nullable String sound) {
+    public static Record play(@Nonnull Location location, @Nullable String sound, @Nonnull Plugin plugin) {
         Objects.requireNonNull(location, "Cannot play sound to null location");
         Record record = parse(sound);
         if (record == null) return null;
-        record.atLocation(location).play();
+        record.atLocation(location).play(plugin);
         return record;
     }
 
@@ -2199,10 +2195,10 @@ public enum CompSound {
          *
          * @since 3.0.0
          */
-        public void play() {
+        public void play(@Nonnull Plugin plugin) {
             if (player == null && location == null)
                 throw new IllegalStateException("Cannot play sound when there is no location available");
-            play(player == null ? location : player.getLocation());
+            play(player == null ? location : player.getLocation(), plugin);
         }
 
         /**
@@ -2212,10 +2208,12 @@ public enum CompSound {
          *
          * @since 3.0.0
          */
-        public void play(@Nonnull Location updatedLocation) {
+        public void play(@Nonnull Location updatedLocation, @Nonnull Plugin plugin) {
             Objects.requireNonNull(updatedLocation, "Cannot play sound at null location");
             if (playAtLocation || player == null) {
-                location.getWorld().playSound(updatedLocation, sound.parseSound(), volume, pitch);
+                Bukkit.getRegionScheduler().run(plugin, updatedLocation, (t) -> {
+                    location.getWorld().playSound(updatedLocation, sound.parseSound(), volume, pitch);
+                });
             } else {
                 player.playSound(updatedLocation, sound.parseSound(), volume, pitch);
             }
@@ -2231,11 +2229,15 @@ public enum CompSound {
          *
          * @since 7.0.2
          */
-        public void stopSound() {
+        public void stopSound(@Nonnull Plugin plugin) {
             if (playAtLocation) {
-                for (Entity entity : location.getWorld().getNearbyEntities(location, volume, volume, volume)) {
-                    if (entity instanceof Player) ((Player) entity).stopSound(sound.parseSound());
-                }
+                Bukkit.getRegionScheduler().run(plugin, location, (t) -> {
+                    for (Entity entity : location.getWorld().getNearbyEntities(location, volume, volume, volume)) {
+                        entity.getScheduler().run(plugin, (task) -> {
+                            if (entity instanceof Player) ((Player) entity).stopSound(sound.parseSound());
+                        }, null);
+                    }
+                });
             }
             if (player != null) player.stopSound(sound.parseSound());
         }

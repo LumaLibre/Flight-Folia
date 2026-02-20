@@ -19,6 +19,7 @@
 package ca.tweetzy.flight.database;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.plugin.Plugin;
 
 import java.sql.Connection;
@@ -96,7 +97,7 @@ public class DataManagerAbstract {
      */
     @Deprecated
     public void async(Runnable runnable) {
-        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, runnable);
+        Bukkit.getAsyncScheduler().runNow(this.plugin, t -> runnable.run());
     }
 
     /**
@@ -104,8 +105,12 @@ public class DataManagerAbstract {
      *
      * @param runnable task to run on the next server tick
      */
-    public void sync(Runnable runnable) {
-        Bukkit.getScheduler().runTask(this.plugin, runnable);
+    public void sync(Location location, Runnable runnable) {
+        Bukkit.getRegionScheduler().run(this.plugin, location, t -> runnable.run());
+    }
+
+    public void syncGlobal(Runnable runnable) {
+        Bukkit.getGlobalRegionScheduler().run(this.plugin, t -> runnable.run());
     }
 
     public void runAsync(Runnable runnable) {
@@ -197,7 +202,7 @@ public class DataManagerAbstract {
         async(() -> {
             runnable.run();
 
-            sync(() -> {
+            syncGlobal(() -> {
                 queues.get(queueKey).remove(runnable);
                 callback.accept(true);
             });

@@ -6,7 +6,7 @@
 
     <groupId>ca.tweetzy</groupId>
     <artifactId>flight</artifactId>
-    <version>3.23.0</version>
+    <version>3.24.0</version>
     <modelVersion>4.0.0</modelVersion>
     <packaging>jar</packaging>
 
@@ -19,10 +19,14 @@
     </properties>
 
     <distributionManagement>
+<!--        <repository>-->
+<!--            <id>repsy</id>-->
+<!--            <name>Tweetzy Maven Repo On Repsy</name>-->
+<!--            <url>https://repo.repsy.io/mvn/kiran/tweetzy</url>-->
+<!--        </repository>-->
         <repository>
-            <id>repsy</id>
-            <name>Tweetzy Maven Repo On Repsy</name>
-            <url>https://repo.repsy.io/mvn/kiran/tweetzy</url>
+            <id>jsinco-repo</id>
+            <url>https://repo.jsinco.dev/releases</url>
         </repository>
     </distributionManagement>
 
@@ -55,8 +59,18 @@
             <id>minecraft-repo</id>
             <url>https://libraries.minecraft.net/</url>
         </repository>
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
     </repositories>
     <dependencies>
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>1.20.3-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>
@@ -165,6 +179,13 @@
                 <configuration>
                     <source>${java.version}</source>
                     <target>${java.version}</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.38</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>

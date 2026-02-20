@@ -20,6 +20,7 @@ package ca.tweetzy.flight.utils.input;
 
 import com.cryptomorin.xseries.messages.ActionBar;
 import com.cryptomorin.xseries.messages.Titles;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import lombok.NonNull;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -32,7 +33,6 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 /**
  * The current file has been created by Kiran Hart
@@ -46,12 +46,12 @@ public abstract class Input implements Listener, Runnable {
     private String title;
     private String subtitle;
 
-    private final BukkitTask task;
+    private final ScheduledTask task;
 
     public Input(@NonNull final JavaPlugin plugin, @NonNull final Player player) {
         this.player = player;
-        Bukkit.getServer().getScheduler().runTaskLater(plugin, player::closeInventory, 1L);
-        this.task = Bukkit.getServer().getScheduler().runTaskTimer(plugin, this, 1L, 1L);
+        player.getScheduler().runDelayed(plugin, (t) -> player.closeInventory(), null, 1L);
+        this.task = player.getScheduler().runAtFixedRate(plugin, t -> this.run(), null, 1L, 1L);
         Bukkit.getServer().getPluginManager().registerEvents(this, plugin);
     }
 

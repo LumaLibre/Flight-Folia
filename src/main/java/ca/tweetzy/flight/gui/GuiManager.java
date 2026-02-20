@@ -70,20 +70,20 @@ public class GuiManager {
             init();
         }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Bukkit.getAsyncScheduler().runNow(plugin, (t) -> {
             Gui openInv = openInventories.get(player);
             if (openInv != null) {
                 openInv.open = false;
             }
 
             Inventory inv = gui.getOrCreateInventory(this);
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            player.getScheduler().run(plugin, (task) -> {
                 player.openInventory(inv);
                 gui.onOpen(this, player);
                 synchronized (lock) {
                     openInventories.put(player, gui);
                 }
-            });
+            }, null);
         });
     }
 
@@ -202,10 +202,10 @@ public class GuiManager {
                 if (manager.shutdown) {
                     gui.onClose(manager, player);
                 } else {
-                    Bukkit.getScheduler().runTaskLater(manager.plugin, () -> {
+                    player.getScheduler().runDelayed(manager.plugin, (t) -> {
                         gui.onClose(manager, player);
                         player.updateInventory();
-                    }, 1);
+                    }, null, 1);
                 }
                 manager.openInventories.remove(player);
             }
