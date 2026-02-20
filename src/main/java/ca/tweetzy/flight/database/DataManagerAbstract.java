@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.database;
 
+import ca.tweetzy.flight.FlightPlugin;
 import ca.tweetzy.flight.database.annotations.Table;
 import ca.tweetzy.flight.database.query.QueryBuilder;
 import ca.tweetzy.flight.database.repository.AnnotatedEntityMapper;
@@ -116,7 +117,7 @@ public class DataManagerAbstract {
      */
     @Deprecated
     public void async(Runnable runnable) {
-        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, runnable);
+        FlightPlugin.getInstance().getScheduler().runAsync(t -> runnable.run());
     }
 
     /**
@@ -124,8 +125,8 @@ public class DataManagerAbstract {
      *
      * @param runnable task to run on the next server tick
      */
-    public void sync(Runnable runnable) {
-        Bukkit.getScheduler().runTask(this.plugin, runnable);
+    public void global(Runnable runnable) {
+        FlightPlugin.getInstance().getScheduler().runNextTick(t -> runnable.run());
     }
 
     public void runAsync(Runnable runnable) {
@@ -197,27 +198,27 @@ public class DataManagerAbstract {
         queue.add(runnable);
 
         if (queue.size() == 1) {
-            runQueue(queueKey);
+            runQueueGlobally(queueKey);
         }
     }
 
     @Deprecated
-    private void runQueue(String queueKey) {
-        doQueue(queueKey, (s) -> {
+    private void runQueueGlobally(String queueKey) {
+        doQueueGlobally(queueKey, (s) -> {
             if (!queues.get(queueKey).isEmpty()) {
-                runQueue(queueKey);
+                runQueueGlobally(queueKey);
             }
         });
     }
 
     @Deprecated
-    private void doQueue(String queueKey, Consumer<Boolean> callback) {
+    private void doQueueGlobally(String queueKey, Consumer<Boolean> callback) {
         Runnable runnable = queues.get(queueKey).getFirst();
 
         async(() -> {
             runnable.run();
 
-            sync(() -> {
+            global(() -> {
                 queues.get(queueKey).remove(runnable);
                 callback.accept(true);
             });

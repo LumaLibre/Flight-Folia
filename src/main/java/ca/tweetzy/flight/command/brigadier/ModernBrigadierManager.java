@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.command.brigadier;
 
+import ca.tweetzy.flight.FlightPlugin;
 import ca.tweetzy.flight.comp.enums.ServerVersion;
 import ca.tweetzy.flight.utils.Common;
 import lombok.NonNull;
@@ -165,9 +166,9 @@ public final class ModernBrigadierManager {
     }
 
     /**
-     * Execute command asynchronously and run callback on main thread
+     * Execute command asynchronously and run callback on global thread
      */
-    public void executeAsyncThenSync(@NonNull Runnable asyncTask, 
+    public void executeAsyncThenGlobal(@NonNull Runnable asyncTask,
                                      @NonNull Runnable syncCallback,
                                      @NonNull Consumer<Throwable> errorHandler) {
         if (plugin == null) {
@@ -177,10 +178,10 @@ public final class ModernBrigadierManager {
         CompletableFuture.runAsync(() -> {
             try {
                 asyncTask.run();
-                // Schedule sync callback on main thread
-                Bukkit.getScheduler().runTask(plugin, syncCallback);
+                // Schedule sync callback on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> syncCallback.run());
             } catch (Exception e) {
-                Bukkit.getScheduler().runTask(plugin, () -> errorHandler.accept(e));
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> errorHandler.accept(e));
             }
         });
     }

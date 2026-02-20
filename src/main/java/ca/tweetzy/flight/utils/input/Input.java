@@ -18,10 +18,12 @@
 
 package ca.tweetzy.flight.utils.input;
 
+import ca.tweetzy.flight.FlightPlugin;
 import ca.tweetzy.flight.gui.GUISessionLock;
 import ca.tweetzy.flight.gui.Gui;
 import com.cryptomorin.xseries.messages.ActionBar;
 import com.cryptomorin.xseries.messages.Titles;
+import com.tcoded.folialib.wrapper.task.WrappedTask;
 import lombok.NonNull;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -37,7 +39,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.lang.reflect.Method;
 
@@ -58,7 +59,7 @@ public abstract class Input implements Listener, Runnable {
     private String title;
     private String subtitle;
 
-    private final BukkitTask task;
+    private final WrappedTask task;
     private boolean closed = false;
     private boolean exiting = false;
     private Gui savedGui = null;
@@ -83,8 +84,8 @@ public abstract class Input implements Listener, Runnable {
         }
         
         // Close inventory automatically - TitleInput handles this
-        Bukkit.getServer().getScheduler().runTaskLater(plugin, player::closeInventory, 1L);
-        this.task = Bukkit.getServer().getScheduler().runTaskTimer(plugin, this, 1L, 1L);
+        FlightPlugin.getInstance().getScheduler().runAtEntityLater(player, t -> player.closeInventory(), 1L);
+        this.task = FlightPlugin.getInstance().getScheduler().runAtEntityTimer(player, this, 1L, 1L);
         Bukkit.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -183,7 +184,7 @@ public abstract class Input implements Listener, Runnable {
                     if (this.preserveSession && this.savedGui != null && gui == this.savedGui) {
                         // Restore session lock after GuiManager finishes processing (runs on next tick)
                         // GuiManager's close handler runs at LOW priority and schedules a task, so we run after that
-                        Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                        FlightPlugin.getInstance().getScheduler().runAtEntityLater(this.player, () -> {
                             if (!this.closed && this.preserveSession) {
                                 GUISessionLock.start(this.player.getUniqueId(), this.savedGui);
                             }
@@ -194,7 +195,7 @@ public abstract class Input implements Listener, Runnable {
                     this.savedGui.setAllowClose(true);
                     // Preserve session lock
                     if (this.preserveSession) {
-                        Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                        FlightPlugin.getInstance().getScheduler().runAtEntityLater(this.player, () -> {
                             if (!this.closed && this.preserveSession) {
                                 GUISessionLock.start(this.player.getUniqueId(), this.savedGui);
                             }
@@ -228,7 +229,7 @@ public abstract class Input implements Listener, Runnable {
                     // Give a small delay to allow transition flags to be set properly
                     // This handles the case where a GUI opens right after TitleInput completes
                     final Gui guiToCheck = gui;
-                    Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                    FlightPlugin.getInstance().getScheduler().runAtEntityLater(this.player, () -> {
                         // Re-check after a tick to see if transition flag was set
                         if (!this.closed && !this.exiting && guiToCheck.isTransitioning()) {
                             // Transition flag was set, this is intentional - allow it
@@ -250,7 +251,7 @@ public abstract class Input implements Listener, Runnable {
                     this.savedGui.setAllowClose(true);
                     
                     // Close with delay to allow transitions
-                    Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+                    FlightPlugin.getInstance().getScheduler().runAtEntityLater(this.player, () -> {
                         if (!this.closed && !this.exiting && this.player.isOnline()) {
                             Inventory currentTop = this.player.getOpenInventory().getTopInventory();
                             if (currentTop != null && currentTop.equals(e.getInventory())) {
@@ -260,7 +261,7 @@ public abstract class Input implements Listener, Runnable {
                     }, 1L);
                 } else {
                     // No GUI info available, close immediately
-                    Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    FlightPlugin.getInstance().getScheduler().runAtEntity(this.player, (t) -> {
                         if (this.player.isOnline() && 
                             this.player.getOpenInventory().getTopInventory().equals(e.getInventory())) {
                             this.player.closeInventory();
@@ -317,8 +318,8 @@ public abstract class Input implements Listener, Runnable {
                 // Mark that we're exiting to prevent InventoryOpenEvent from interfering
                 this.exiting = true;
                 // Delay onExit slightly to ensure input is fully closed and handlers unregistered before GUI reopens
-                Bukkit.getScheduler().runTaskLater(
-                    this.plugin,
+                FlightPlugin.getInstance().getScheduler().runAtEntityLater(
+                    this.player,
                     () -> {
                         // Double-check player is still online before calling onExit
                         if (this.player != null && this.player.isOnline()) {

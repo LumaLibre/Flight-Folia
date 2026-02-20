@@ -1,5 +1,6 @@
 package ca.tweetzy.flight.gui;
 
+import ca.tweetzy.flight.FlightPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -92,7 +93,7 @@ public final class GUISessionLock {
     /** Optional debug utility: print all active GUI sessions (safe to call). */
     public static void dumpActiveSessions() {
         if (!DEBUG) return;
-        Bukkit.getScheduler().runTaskAsynchronously(Bukkit.getPluginManager().getPlugin("Flight"), () -> {
+        FlightPlugin.getInstance().getScheduler().runAsync((t) -> {
             Bukkit.getLogger().info("[GUISessionLock] === ACTIVE GUI SESSIONS ===");
             ACTIVE_GUI.forEach((uuid, session) -> {
                 Player p = Bukkit.getPlayer(uuid);

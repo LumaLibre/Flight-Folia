@@ -24,6 +24,9 @@ import ca.tweetzy.flight.dependency.Dependency;
 import ca.tweetzy.flight.dependency.DependencyLoader;
 import ca.tweetzy.flight.dependency.Relocation;
 import ca.tweetzy.flight.utils.Common;
+import com.tcoded.folialib.FoliaLib;
+import com.tcoded.folialib.impl.PlatformScheduler;
+import com.tcoded.folialib.util.FoliaLibOptions;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.Listener;
@@ -47,6 +50,8 @@ public abstract class FlightPlugin extends JavaPlugin implements Listener {
     private static TweetzyYamlConfig coreConfig;
 
     private boolean emergencyStop = false;
+
+    private FoliaLib foliaLib;
 
     /**
      * The instance of this plugin
@@ -76,6 +81,8 @@ public abstract class FlightPlugin extends JavaPlugin implements Listener {
             if (!dependencies.isEmpty()) {
                 new DependencyLoader(this).loadDependencies(dependencies);
             }
+
+            foliaLib = new FoliaLib(this, getFoliaLibOptions());
             
             onWake();
         } catch (final Throwable throwable) {
@@ -198,6 +205,14 @@ public abstract class FlightPlugin extends JavaPlugin implements Listener {
     -------------------------------------------------------------------------
      */
 
+    public FoliaLib getFoliaLib() {
+        return foliaLib;
+    }
+
+    public PlatformScheduler getScheduler() {
+        return foliaLib.getScheduler();
+    }
+
     public String getPluginName() {
         return getDescription().getName();
     }
@@ -208,6 +223,12 @@ public abstract class FlightPlugin extends JavaPlugin implements Listener {
 
     public String getVersion() {
         return getDescription().getVersion();
+    }
+
+    protected FoliaLibOptions getFoliaLibOptions() {
+        FoliaLibOptions foliaLibOptions = new FoliaLibOptions();
+        foliaLibOptions.disableNotifications();
+        return foliaLibOptions;
     }
 
     protected int getBStatsId() {

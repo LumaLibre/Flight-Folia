@@ -18,11 +18,11 @@
 
 package ca.tweetzy.flight.utils;
 
+import ca.tweetzy.flight.FlightPlugin;
 import ca.tweetzy.flight.collection.expiringmap.ExpiringMap;
 import lombok.NonNull;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Map;
 import java.util.UUID;
@@ -50,12 +50,9 @@ public class CooldownManager {
             .build();
         
         // Cleanup task to remove expired cooldowns
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                cleanupExpiredCooldowns();
-            }
-        }.runTaskTimerAsynchronously(plugin, 0L, 20L * 60L); // Every minute
+        FlightPlugin.getInstance().getScheduler().runTimerAsync(() -> {
+            cleanupExpiredCooldowns();
+        }, 0L, 20L * 60L); // Every minute
     }
     
     /**

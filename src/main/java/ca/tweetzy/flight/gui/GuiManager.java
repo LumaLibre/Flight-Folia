@@ -1,5 +1,6 @@
 package ca.tweetzy.flight.gui;
 
+import ca.tweetzy.flight.FlightPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -76,12 +77,12 @@ public class GuiManager {
         }
 
         // Prepare inventory creation in async (safe operation)
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        FlightPlugin.getInstance().getScheduler().runAsync((a) -> {
             Inventory inv = gui.getOrCreateInventory(this);
 
             // All state updates must happen atomically on the main thread
             // This prevents race conditions where clicks arrive between map update and session lock update
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            FlightPlugin.getInstance().getScheduler().runAtEntity(player, (s) -> {
                 // Get previous GUI before updating map
                 Gui previous = openInventories.get(player);
                 
@@ -417,7 +418,7 @@ public class GuiManager {
                 }
             }
 
-            Bukkit.getScheduler().runTask(manager.plugin, () -> {
+            FlightPlugin.getInstance().getScheduler().runAtEntity(player, (t) -> {
                 gui.onClose(manager, player);
                 player.updateInventory();
             });

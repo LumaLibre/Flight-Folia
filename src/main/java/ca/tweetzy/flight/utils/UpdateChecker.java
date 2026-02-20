@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.utils;
 
+import ca.tweetzy.flight.FlightPlugin;
 import lombok.NonNull;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -107,7 +108,7 @@ public class UpdateChecker {
                     this.checked = true;
                     
                     if (callback != null) {
-                        Bukkit.getScheduler().runTask(plugin, () -> {
+                        FlightPlugin.getInstance().getScheduler().runNextTick((t) -> {
                             callback.accept(new UpdateResult(latestVersion, currentVersion, updateAvailable, downloadUrl));
                         });
                     }

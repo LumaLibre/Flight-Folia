@@ -18,6 +18,7 @@
 
 package ca.tweetzy.flight.command;
 
+import ca.tweetzy.flight.FlightPlugin;
 import ca.tweetzy.flight.utils.Common;
 import lombok.NonNull;
 import org.bukkit.Bukkit;
@@ -46,17 +47,17 @@ public final class AsyncCommandExecutor {
      * @param syncCallback Callback to run on main thread after async task completes
      * @param errorHandler Error handler (runs on main thread)
      */
-    public void executeAsync(@NonNull Runnable asyncTask,
+    public void executeAsyncThenGlobal(@NonNull Runnable asyncTask,
                             @NonNull Runnable syncCallback,
                             @NonNull Consumer<Throwable> errorHandler) {
         CompletableFuture.runAsync(() -> {
             try {
                 asyncTask.run();
-                // Schedule callback on main thread
-                Bukkit.getScheduler().runTask(plugin, syncCallback);
+                // Schedule callback on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> syncCallback.run());
             } catch (Exception e) {
-                // Schedule error handler on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> errorHandler.accept(e));
+                // Schedule error handler on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> errorHandler.accept(e));
             }
         });
     }
@@ -69,17 +70,17 @@ public final class AsyncCommandExecutor {
      * @param errorHandler Error handler (runs on main thread)
      * @param <T> Result type
      */
-    public <T> void executeAsync(@NonNull java.util.function.Supplier<T> asyncTask,
+    public <T> void executeAsyncThenGlobal(@NonNull java.util.function.Supplier<T> asyncTask,
                                  @NonNull Consumer<T> syncCallback,
                                  @NonNull Consumer<Throwable> errorHandler) {
         CompletableFuture.supplyAsync(asyncTask)
             .thenAccept(result -> {
-                // Schedule callback on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> syncCallback.accept(result));
+                // Schedule callback on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> syncCallback.accept(result));
             })
             .exceptionally(throwable -> {
-                // Schedule error handler on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> errorHandler.accept(throwable));
+                // Schedule error handler on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> errorHandler.accept(throwable));
                 return null;
             });
     }
@@ -92,18 +93,18 @@ public final class AsyncCommandExecutor {
      * @param syncCallback Sync callback after async task
      * @param errorHandler Error handler
      */
-    public void executeAsync(@NonNull CommandContext context,
+    public void executeAsyncThenGlobal(@NonNull CommandContext context,
                             @NonNull Consumer<CommandContext> asyncTask,
                             @NonNull Consumer<CommandContext> syncCallback,
                             @NonNull Consumer<Throwable> errorHandler) {
         CompletableFuture.runAsync(() -> {
             try {
                 asyncTask.accept(context);
-                // Schedule callback on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> syncCallback.accept(context));
+                // Schedule callback on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> syncCallback.accept(context));
             } catch (Exception e) {
-                // Schedule error handler on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> errorHandler.accept(e));
+                // Schedule error handler on global thread
+                FlightPlugin.getInstance().getScheduler().runNextTick(t -> errorHandler.accept(e));
             }
         });
     }
@@ -115,7 +116,7 @@ public final class AsyncCommandExecutor {
                                        @NonNull Runnable asyncTask,
                                        @NonNull String successMessage,
                                        @NonNull String errorMessage) {
-        executeAsync(
+        executeAsyncThenGlobal(
             asyncTask,
             () -> {
                 if (successMessage != null && !successMessage.isEmpty()) {

@@ -6,7 +6,7 @@
 
     <groupId>ca.tweetzy</groupId>
     <artifactId>flight</artifactId>
-    <version>3.44.0</version>
+    <version>3.45.0</version>
     <modelVersion>4.0.0</modelVersion>
     <packaging>jar</packaging>
 
@@ -55,6 +55,10 @@
             <id>minecraft-repo</id>
             <url>https://libraries.minecraft.net/</url>
         </repository>
+        <repository>
+            <id>tcoded-releases</id>
+            <url>https://repo.tcoded.com/releases</url>
+        </repository>
     </repositories>
     <dependencies>
         <dependency>
@@ -68,6 +72,12 @@
             <artifactId>authlib</artifactId>
             <version>6.0.54</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tcoded</groupId>
+            <artifactId>FoliaLib</artifactId>
+            <version>0.5.1</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>com.github.MilkBowl</groupId>
@@ -278,6 +288,10 @@
                         <relocation>
                             <pattern>io.github.bananapuncher714.nbteditor</pattern>
                             <shadedPattern>${project.groupId}.${project.artifactId}.comp</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.tcoded.folialib</pattern>
+                            <shadedPattern>${project.groupId}.${project.artifactId}.folialib</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>

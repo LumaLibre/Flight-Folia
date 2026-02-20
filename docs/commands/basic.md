@@ -305,7 +305,7 @@ public class AsyncCommand extends Command {
 }
 ```
 
-**Note:** When using async commands, be careful with Bukkit API calls. Most Bukkit API is not thread-safe and should only be called from the main thread. Use `Bukkit.getScheduler().runTask()` to execute code on the main thread.
+**Note:** When using async commands, be careful with Bukkit API calls. Most Bukkit API is not thread-safe and should only be called from the main thread. Use `FlightPlugin#getScheduler` to execute code on the main thread.
 
 ## Best Practices
 
