@@ -6,7 +6,7 @@
 
     <groupId>ca.tweetzy</groupId>
     <artifactId>flight</artifactId>
-    <version>3.45.0</version>
+    <version>3.46.2</version>
     <modelVersion>4.0.0</modelVersion>
     <packaging>jar</packaging>
 
@@ -19,10 +19,14 @@
     </properties>
 
     <distributionManagement>
+<!--        <repository>-->
+<!--            <id>hartserver</id>-->
+<!--            <name>Hart Server Repo</name>-->
+<!--            <url>https://nexus.hartserver.ca/repository/maven-releases/</url>-->
+<!--        </repository>-->
         <repository>
-            <id>hartserver</id>
-            <name>Hart Server Repo</name>
-            <url>https://nexus.hartserver.ca/repository/maven-releases/</url>
+            <id>jsinco-repo</id>
+            <url>https://repo.jsinco.dev/releases</url>
         </repository>
     </distributionManagement>
 
@@ -113,7 +117,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>1.18.38</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -185,6 +189,13 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                     <release>${java.version}</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.38</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>
@@ -228,9 +239,12 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.5.1</version>
                 <configuration>
+                    <shadedArtifactAttached>false</shadedArtifactAttached>
+                    <createDependencyReducedPom>true</createDependencyReducedPom>
                     <artifactSet>
                         <includes>
                             <include>ca.tweetzy:*</include>
+                            <include>com.tcoded:FoliaLib*</include>
                             <include>com.zaxxer:HikariCP*</include>
                             <include>com.github.cryptomorin:*</include>
                             <include>io.github.bananapuncher714:*</include>
@@ -249,6 +263,7 @@
                                 <include>io/github/bananapuncher714/</include>
                                 <include>de/tr7zw/</include>
                                 <include>org/yaml/</include>
+                                <include>com/tcoded/</include>
                             </includes>
                             <excludes>
                                 <exclude>META-INF/MANIFEST.MF</exclude>
