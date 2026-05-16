@@ -19,6 +19,7 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Level;
 
 /**
  * Modern, safe GUI Manager for Spigot/Paper 1.20.6 → 1.21+.
@@ -26,7 +27,7 @@ import java.util.concurrent.ConcurrentMap;
  * ✅ Handles InventoryView interface/class differences safely
  * ✅ Prevents packet-based duplication exploits
  * ✅ Fully async-safe (never calls Bukkit methods off the main thread)
- * ✅ Automatic session expiry cleanup
+ * ✅ Per-player GUI session lock (instance match + lifecycle via {@link GUISessionLock})
  */
 public class GuiManager {
 
@@ -171,7 +172,7 @@ public class GuiManager {
             // Log error but don't crash server - return null to gracefully handle
             Bukkit.getLogger().warning("[GuiManager] Failed to resolve top inventory via reflection: " + e.getMessage());
             if (DEBUG) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.FINE, "[GuiManager] Reflection detail (getTopInventoryCompat)", e);
             }
             return null;
         }
@@ -189,7 +190,7 @@ public class GuiManager {
             // Log error but don't crash server - return null to gracefully handle
             Bukkit.getLogger().warning("[GuiManager] Failed to resolve top inventory via reflection: " + e.getMessage());
             if (DEBUG) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.FINE, "[GuiManager] Reflection detail (getTopInventory)", e);
             }
             return null;
         }
@@ -209,7 +210,7 @@ public class GuiManager {
 
         /**
          * Validates the player's GUI session.
-         * Automatically cleans up expired or invalid sessions.
+         * Automatically cleans up invalid sessions (wrong GUI instance or cleared reference).
          * 
          * Additional validation ensures:
          * 1. Session lock matches the GUI instance
@@ -309,7 +310,7 @@ public class GuiManager {
             Gui gui = holder.getGUI();
 
             // CRITICAL: Session validation - cancel if invalid to prevent other plugins from processing stale clicks
-            // This is essential for preventing clicks on expired/stale GUI instances from being processed
+            // This is essential for preventing clicks on stale/wrong GUI instances from being processed
             // by other plugins that might have higher priority handlers
             if (!validateSession(player, gui)) {
                 event.setCancelled(true);
@@ -345,10 +346,16 @@ public class GuiManager {
                 if (!unlocked) event.setCancelled(true);
 
                 if (gui.onClick(manager, player, top, event)) {
-                    if (event.getRawSlot() == gui.nextPageIndex || event.getRawSlot() == gui.prevPageIndex) {
+                    // Skip playing click/navigate sound if the click caused a GUI transition (inventory changed)
+                    if (player.getOpenInventory().getTopInventory() != top) {
+                        // GUI was replaced (e.g. confirm purchase), don't play another sound
+                    } else if (event.getRawSlot() == gui.nextPageIndex || event.getRawSlot() == gui.prevPageIndex) {
                         if (gui.getNavigateSound() != null)
                             player.playSound(player.getLocation(), gui.getNavigateSound().parseSound(), 1F, 1F);
                         else if (gui.getDefaultSound() != null)
+                            player.playSound(player.getLocation(), gui.getDefaultSound().parseSound(), 1F, 1F);
+                    } else {
+                        if (gui.getDefaultSound() != null)
                             player.playSound(player.getLocation(), gui.getDefaultSound().parseSound(), 1F, 1F);
                     }
                 }

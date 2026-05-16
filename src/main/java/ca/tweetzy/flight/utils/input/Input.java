@@ -41,6 +41,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Method;
+import java.util.logging.Level;
 
 /**
  * The current file has been created by Kiran Hart
@@ -124,8 +125,13 @@ public abstract class Input implements Listener, Runnable {
     )
     public void onChat(AsyncPlayerChatEvent e) {
         if (e.getPlayer().equals(this.player)) {
-            this.onInput(e.getMessage());
             e.setCancelled(true);
+            final String message = e.getMessage();
+            Bukkit.getScheduler().runTask(this.plugin, () -> {
+                if (!this.closed && this.player != null && this.player.isOnline()) {
+                    this.onInput(message);
+                }
+            });
         }
     }
 
@@ -326,8 +332,7 @@ public abstract class Input implements Listener, Runnable {
                             try {
                                 this.onExit(this.player);
                             } catch (Exception e) {
-                                Bukkit.getLogger().warning("Error in Input onExit handler: " + e.getMessage());
-                                e.printStackTrace();
+                                plugin.getLogger().log(Level.WARNING, "Error in Input onExit handler", e);
                             }
                         }
                         this.exiting = false;

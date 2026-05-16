@@ -28,6 +28,7 @@ import org.bukkit.entity.Entity;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.logging.Level;
 
 /**
  * Task utilities for better async/sync task management.
@@ -48,7 +49,7 @@ public final class TaskUtil {
             try {
                 task.run();
             } catch (Exception e) {
-                //plugin.getLogger().severe("Error in async task: " + e.getMessage());
+                //plugin.getLogger().log(Level.SEVERE, "Error in async task", e);
                 e.printStackTrace();
             }
         });
@@ -112,7 +113,7 @@ public final class TaskUtil {
             try {
                 return supplier.get();
             } catch (Exception e) {
-                //plugin.getLogger().severe("Error in async supplier: " + e.getMessage());
+                //plugin.getLogger().log(Level.SEVERE, "Error in async supplier", e);
                 e.printStackTrace();
                 return null;
             }

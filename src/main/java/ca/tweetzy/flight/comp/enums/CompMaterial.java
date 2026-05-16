@@ -42,6 +42,7 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1894,6 +1895,9 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     @XInfo(since = "1.21.11") NETHERITE_NAUTILUS_ARMOR,
     @XInfo(since = "1.21.11") COPPER_NAUTILUS_ARMOR,
 
+    @XInfo(since = "26.1") GOLDEN_DANDELION,
+    @XInfo(since = "26.1") POTTED_GOLDEN_DANDELION,
+
     ;
 
 
@@ -2068,7 +2072,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     /**
      * The current version of the server.
      *
-     * @return the current server version minor number.
+     * @return for legacy {@code 1.x} servers, the minor segment (e.g. 21 for 1.21); for year-based
+     * releases (e.g. 26.1), {@code major * 100 + minor} so ordering and {@link #supports(int)} stay consistent.
      * @see #supports(int)
      * @since 2.0.0
      */
@@ -2585,7 +2590,8 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
     @ApiStatus.Internal
     private static final class Data {
         /**
-         * The current version of the server in the form of a major version.
+         * Parsed from {@code Bukkit.getVersion()} {@code MC:} segment: legacy {@code 1.minor} uses {@code minor};
+         * otherwise {@code major * 100 + minor} (e.g. 26.1 → 2601).
          * If the static initialization for this fails, you know something's wrong with the server software.
          *
          * @since 1.0.0
@@ -2601,10 +2607,15 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
                 VERSION = 21;
             } else {
                 String version = Bukkit.getVersion();
-                Matcher matcher = Pattern.compile("MC: \\d\\.(\\d+)").matcher(version);
+                Matcher matcher = Pattern.compile("MC:\\s*(\\d+)\\.(\\d+)").matcher(version);
 
-                if (matcher.find()) VERSION = Integer.parseInt(matcher.group(1));
-                else throw new IllegalArgumentException("Failed to parse server version from: " + version);
+                if (matcher.find()) {
+                    int major = Integer.parseInt(matcher.group(1));
+                    int minor = Integer.parseInt(matcher.group(2));
+                    VERSION = major == 1 ? minor : major * 100 + minor;
+                } else {
+                    throw new IllegalArgumentException("Failed to parse server version from: " + version);
+                }
             }
         }
 
@@ -2632,7 +2643,7 @@ public enum CompMaterial implements XBase<CompMaterial, Material> {
                 // noinspection unchecked
                 mapping = (Map<String, Material>) field.get(null);
             } catch (Throwable e) {
-                new IllegalStateException("Unable to get Material.BY_NAME field", e).printStackTrace();
+                Bukkit.getLogger().log(Level.SEVERE, "Unable to get Material.BY_NAME field", e);
                 mapping = null;
             }
 
